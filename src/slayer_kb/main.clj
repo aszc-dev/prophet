@@ -28,6 +28,9 @@
 (defn- glossary-build [_]
   (println "glossary:" (pr-str (glossary/build!))))
 
+(defn- glossary-define [_]
+  (println "glossary-define:" (pr-str (glossary/define!))))
+
 (defn- web-build [_]
   (println "web:" (pr-str (web/build!))))
 
@@ -47,6 +50,7 @@
   {"smoke"         smoke
    "ingest-repo"   ingest-repo
    "glossary-build" glossary-build
+   "glossary-define" glossary-define
    "index-rebuild" index-rebuild
    "search"        search
    "web-build"     web-build

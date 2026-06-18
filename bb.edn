@@ -16,6 +16,10 @@
   {:doc "Derive glossary concept nodes from kb/"
    :task (p/shell "clojure" "-M:run" "glossary-build")}
 
+  glossary:define
+  {:doc "Optional grounded LLM definitions for concepts lacking one (generate-once; inert without SLAYER_CHAT_URL)"
+   :task (p/shell "clojure" "-M:run" "glossary-define")}
+
   web:build
   {:doc "Generate + build the roamable Hugo site from kb/"
    :task (p/shell "clojure" "-M:run" "web-build")}

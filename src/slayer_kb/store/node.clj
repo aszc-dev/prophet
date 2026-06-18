@@ -16,14 +16,19 @@
 (def ^:private fm-keys
   "Frontmatter keys, in canonical on-disk order (data-contracts.md §2)."
   [:id :type :title :status :superseded_by :moc :tags :visibility
-   :source_key :aliases :provenance :links :content_hash :embedding_hash :updated])
+   :source_key :aliases :provenance :links :definition
+   :content_hash :embedding_hash :updated])
 
 (defn- ordered-frontmatter [node]
   (reduce (fn [m k] (if (contains? node k) (assoc m k (get node k)) m))
           (array-map) fm-keys))
 
-(defn- render-body [{:keys [state observations]}]
-  (str "\n## State (synthesized — claims only from the observations below)\n\n"
+(defn- render-body [{:keys [definition state observations]}]
+  (str "\n"
+       (when (seq (str definition))
+         (str "## Definition (draft — grounded in the provenance below)\n\n"
+              definition "\n\n"))
+       "## State (synthesized — claims only from the observations below)\n\n"
        (or state "_pending synthesis_") "\n\n"
        "## Observations (append-only; every line carries a ref)\n\n"
        (str/join "\n"
@@ -47,7 +52,7 @@
         obs   (->> (str/split-lines (or body ""))
                    (keep #(when-let [[_ date ref text] (re-matches obs-re %)]
                             {:date date :ref ref :text text})))]
-    (assoc front :observations (vec obs))))
+    (assoc front :observations (vec obs) :body (or body ""))))
 
 ;; --- paths -----------------------------------------------------------------
 
@@ -120,9 +125,16 @@
         node     (cond-> node
                    existing (assoc :observations
                                    (merge-observations (:observations existing)
-                                                       (:observations node))))
+                                                       (:observations node)))
+                   ;; A grounded definition on disk is knowledge (append-only): a
+                   ;; writer that does not supply one (e.g. glossary:build) must not
+                   ;; drop it. glossary:define is the only writer that sets it.
+                   (and existing (seq (str (:definition existing)))
+                        (not (seq (str (:definition node)))))
+                   (assoc :definition (:definition existing)))
         payload  (pr-str (canonical (select-keys node [:type :title :status :provenance
-                                                       :links :moc :tags :aliases :observations])))
+                                                       :links :moc :tags :aliases
+                                                       :definition :observations])))
         hash     (util/sha256 payload)
         node     (assoc node :content_hash hash)]
     (if (= (:content_hash existing) hash)

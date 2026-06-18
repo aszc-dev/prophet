@@ -1,0 +1,34 @@
+;; Per-repo ingest config for `slayerlabs/slayer` (a Next.js app, not Hugo).
+;; The knowledge lives in structured JSON under public/, not in content/*.md, so
+;; the kind-table and the JSON field-mappings are source-specific. A different
+;; source = a different config; downstream stages do not change.
+{:kind-rules
+ [["public/data/datasety.json"   :json]
+  ["public/data/benchmarks.json" :json]
+  ;; narrative knowledge docs (plain markdown, no frontmatter)
+  ["*.md"                        :doc]
+  ["bench/*.md"                  :doc]
+  ["public/data/**/*.md"         :doc]]
+
+ ;; path -> spec. Maps each source's own field names to the canonical node shape.
+ :json-specs
+ {"public/data/datasety.json"
+  {:node-type :dataset
+   :iter :list
+   :id :id
+   :title :nazwa
+   :state :opis
+   :tags :tagi
+   :moc ["dane"]
+   :aliases [:id :nazwa]
+   :observations [:rozmiar :licencja :status :kategoria :link]}
+
+  "public/data/benchmarks.json"
+  {:node-type :benchmark
+   :iter :list
+   :id :id
+   :title :nazwa
+   :state :opis
+   :moc ["ewaluacja"]
+   :aliases [:id :nazwa]
+   :observations [:metryka :metryka_klucz :rozmiar :licencja :rola :kategoria :link]}}}

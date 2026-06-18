@@ -6,6 +6,7 @@
             [slayer-kb.extract.page :as page]
             [slayer-kb.extract.card :as card]
             [slayer-kb.extract.config :as config]
+            [slayer-kb.extract.json :as ejson]
             [slayer-kb.resolve.link :as resolve]
             [slayer-kb.store.node :as store]))
 
@@ -77,6 +78,27 @@
     (is (= "exp one" (:title back)))
     (is (= 1 (count (:observations back))))
     (is (= "result: 9" (:text (first (:observations back)))))))
+
+(deftest json-spec-extract-maps-foreign-fields
+  ;; mirrors slayer's datasety.json: a list of records with Polish field names
+  (let [spec {:node-type :dataset :iter :list :id :id :title :nazwa :state :opis
+              :tags :tagi :moc ["dane"] :aliases [:id :nazwa]
+              :observations [:rozmiar :licencja]}
+        item {:kind :json :ref "git:slayer@s:public/data/datasety.json"
+              :meta {:repo "slayer" :path "public/data/datasety.json"}
+              :body (str "[{\"id\":\"llmzszl\",\"nazwa\":\"LLMzSzŁ\",\"opis\":\"egzaminy CKE\","
+                         "\"rozmiar\":\"18 821\",\"licencja\":\"publiczny\",\"tagi\":[\"eval\",\"pl\"]}]")}
+        [n] (ejson/extract item spec)]
+    (is (= :dataset (:type n)))
+    (is (= "LLMzSzŁ" (:title n)) "title mapped from :nazwa")
+    (is (= "egzaminy CKE" (:state n)) "state mapped from :opis")
+    (is (= #{"llmzszl" "LLMzSzŁ"} (set (:aliases n))) "aliases seed canonical names")
+    (is (= "slayer:public/data/datasety.json#llmzszl" (:source_key n)) "sha-free, id-anchored key")
+    (is (every? #(re-find #"#llmzszl$" (:ref %)) (:observations n)) "per-record provenance anchor")
+    (is (some #(= "rozmiar: 18 821" (:text %)) (:observations n)))
+    (is (= ["eval" "pl"] (:tags n))))
+  (is (empty? (ejson/extract {:kind :json :meta {:path "x.json"} :body "[]"} nil))
+      "no spec -> skipped"))
 
 (deftest resolver-structural-links
   (let [card {:type :dataset :title "style-sft-1.6k" :aliases ["style-sft-1.6k"]

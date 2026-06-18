@@ -1,0 +1,38 @@
+:root {
+  --fg: #1a1a1a; --muted: #666; --bg: #fafafa; --card: #fff;
+  --accent: #2b6cb0; --line: #e2e2e2;
+  --type: #5a4fcf; --status-draft: #b7791f; --status-current: #2f855a;
+}
+* { box-sizing: border-box; }
+body {
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--fg); background: var(--bg); margin: 0;
+}
+main { max-width: 56rem; margin: 0 auto; padding: 2rem 1.25rem; }
+header.site, footer.site {
+  max-width: 56rem; margin: 0 auto; padding: 1rem 1.25rem;
+  display: flex; gap: 1rem; align-items: baseline;
+}
+header.site { border-bottom: 1px solid var(--line); }
+footer.site { border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+.brand { font-weight: 700; text-decoration: none; color: var(--fg); margin-right: auto; }
+header.site nav a { margin-left: 1rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 1.7rem; margin: .2rem 0 1rem; }
+h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .04em;
+     color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: .25rem; margin-top: 2rem; }
+.meta { display: flex; gap: .4rem; flex-wrap: wrap; }
+.badge { font-size: .72rem; padding: .1rem .5rem; border-radius: 1rem; background: #eee; color: var(--muted); }
+.badge.type-{ } .badge.type-experiment, .badge.type-dataset, .badge.type-benchmark,
+.badge.type-concept, .badge.type-axis, .badge.type-source { background: #ece9fb; color: var(--type); }
+.badge.status-draft { background: #fefcbf; color: var(--status-draft); }
+.badge.status-current { background: #e6fffa; color: var(--status-current); }
+.badge.moc { background: #ebf4ff; color: var(--accent); }
+ul { padding-left: 1.2rem; }
+.prov { font-size: .9rem; }
+.prov code { background: #f0f0f0; padding: .05rem .3rem; border-radius: .2rem; font-size: .85em; }
+.egograph { font-size: .92rem; }
+.egograph .center { font-weight: 700; }
+.rel-label { font-weight: 600; color: var(--muted); }
+.count { color: var(--muted); font-size: .85rem; }

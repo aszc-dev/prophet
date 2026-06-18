@@ -12,6 +12,14 @@
   {:doc "Rebuild the SQLite/vector index from kb/"
    :task (p/shell "clojure" "-M:run" "index-rebuild")}
 
+  glossary:build
+  {:doc "Derive glossary concept nodes from kb/"
+   :task (p/shell "clojure" "-M:run" "glossary-build")}
+
+  web:build
+  {:doc "Generate + build the roamable Hugo site from kb/"
+   :task (p/shell "clojure" "-M:run" "web-build")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

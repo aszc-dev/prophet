@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if .Title }}{{ .Title }} · {{ end }}{{ .Site.Title }}</title>
+  <link rel="stylesheet" href="/css/kb.css">
+</head>
+<body>
+  <header class="site">
+    <a class="brand" href="/">{{ .Site.Title }}</a>
+    <nav>
+      <a href="/glosariusz/">Glossary</a>
+      <a href="/moc/">MOCs</a>
+    </nav>
+  </header>
+  <main>
+    {{ block "main" . }}{{ .Content }}{{ end }}
+  </main>
+  <footer class="site">
+    <span>Derived view · files are the source of truth · every claim carries a source.</span>
+  </footer>
+</body>
+</html>

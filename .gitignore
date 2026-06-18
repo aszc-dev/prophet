@@ -10,5 +10,12 @@ target/
 # local test scaffolding (a throwaway source git repo for manual ingest)
 /fixtures/
 
+# generated Hugo site (derived from kb/, fully rebuildable)
+web/content/
+web/content-internal/
+web/public/
+web/resources/
+web/.hugo_build.lock
+
 # macOS
 .DS_Store

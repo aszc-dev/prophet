@@ -1,0 +1,11 @@
+{{ define "main" }}
+<article class="node">
+  <div class="meta">
+    {{ with .Params.nodetype }}<span class="badge type-{{ . }}">{{ . }}</span>{{ end }}
+    {{ with .Params.status }}<span class="badge status-{{ . }}">{{ . }}</span>{{ end }}
+    {{ range .Params.moc }}<a class="badge moc" href="/moc/{{ . }}/">{{ . }}</a>{{ end }}
+  </div>
+  <h1>{{ .Title }}</h1>
+  {{ .Content }}
+</article>
+{{ end }}

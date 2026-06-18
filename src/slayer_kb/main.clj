@@ -8,6 +8,7 @@
             [slayer-kb.index.query :as query]
             [slayer-kb.mcp.server :as mcp]
             [slayer-kb.glossary :as glossary]
+            [slayer-kb.web.build :as web]
             [slayer-kb.ingest :as ingest]))
 
 (def ^:private db-path "kb.db")
@@ -27,6 +28,9 @@
 (defn- glossary-build [_]
   (println "glossary:" (pr-str (glossary/build!))))
 
+(defn- web-build [_]
+  (println "web:" (pr-str (web/build!))))
+
 (defn- index-rebuild [_]
   (binding [query/*db-path* db-path]
     (println "index:" (pr-str (schema/rebuild! db-path)))))
@@ -45,6 +49,7 @@
    "glossary-build" glossary-build
    "index-rebuild" index-rebuild
    "search"        search
+   "web-build"     web-build
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})
 
 (defn -main [& args]

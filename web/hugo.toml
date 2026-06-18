@@ -1,0 +1,19 @@
+# Hugo config for the Slayer KB roamable web. The content/ dir is GENERATED from
+# kb/ by `bb web:build` — never hand-edit it.
+baseURL = "/"
+title = "Slayer KB"
+enableGitInfo = false
+
+# the generated bodies already contain links/HTML we emit deterministically
+[markup.goldmark.renderer]
+unsafe = true
+
+[markup.tableOfContents]
+startLevel = 2
+endLevel = 3
+
+# this is a derived knowledge view, not a tag-taxonomy blog
+disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
+
+[params]
+tagline = "Provenance-first knowledge base — roam from a term to what uses it."

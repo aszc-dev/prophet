@@ -3,12 +3,16 @@
 ;; the kind-table and the JSON field-mappings are source-specific. A different
 ;; source = a different config; downstream stages do not change.
 {:kind-rules
- [["public/data/datasety.json"   :json]
-  ["public/data/benchmarks.json" :json]
+ [["public/data/datasety.json"       :json]
+  ["public/data/benchmarks.json"     :json]
+  ["public/results/experiments.json" :json]
+  ["public/results/matrix.json"      :json]
+  ;; leaderboard results attach as observations to benchmark anchors
+  ["public/results/leaderboard.json" :leaderboard]
   ;; narrative knowledge docs (plain markdown, no frontmatter)
-  ["*.md"                        :doc]
-  ["bench/*.md"                  :doc]
-  ["public/data/**/*.md"         :doc]]
+  ["*.md"                            :doc]
+  ["bench/*.md"                      :doc]
+  ["public/data/**/*.md"             :doc]]
 
  ;; path -> spec. Maps each source's own field names to the canonical node shape.
  :json-specs
@@ -31,4 +35,26 @@
    :state :opis
    :moc ["ewaluacja"]
    :aliases [:id :nazwa]
-   :observations [:metryka :metryka_klucz :rozmiar :licencja :rola :kategoria :link]}}}
+   :observations [:metryka :metryka_klucz :rozmiar :licencja :rola :kategoria :link]}
+
+  "public/results/experiments.json"
+  {:node-type :experiment
+   :iter :dict-by-key
+   :under "experiments"
+   :id :id
+   :title :name
+   :state :method
+   :moc ["eksperymenty"]
+   :aliases [:id]
+   :observations [:base :method :status :date]}
+
+  "public/results/matrix.json"
+  {:node-type :axis
+   :iter :dict-by-key
+   :under "sections"
+   :id :official_for
+   :title :title
+   :state :protocol
+   :moc ["ewaluacja"]
+   :aliases [:official_for]
+   :observations [:protocol :official_for :note]}}}

@@ -8,6 +8,7 @@
             [slayer-kb.extract.config :as config]
             [slayer-kb.extract.json :as ejson]
             [slayer-kb.resolve.link :as resolve]
+            [slayer-kb.glossary :as glossary]
             [slayer-kb.store.node :as store]))
 
 (deftest glob-classification
@@ -99,6 +100,25 @@
     (is (= ["eval" "pl"] (:tags n))))
   (is (empty? (ejson/extract {:kind :json :meta {:path "x.json"} :body "[]"} nil))
       "no spec -> skipped"))
+
+(deftest glossary-candidates-from-recurring-tags
+  (let [nodes [{:id "01A" :type :dataset :title "DS-A" :tags ["eval" "pl"]
+                :provenance [{:source :git :ref "git:r@s:a"}]}
+               {:id "01B" :type :benchmark :title "B-B" :tags ["eval" "mcq"]
+                :provenance [{:source :git :ref "git:r@s:b"}]}
+               {:id "01C" :type :experiment :title "E-C" :tags ["eval"]
+                :provenance [{:source :git :ref "git:r@s:c"}]}]
+        cs (glossary/candidates nodes)
+        by-title (into {} (map (juxt :title identity) cs))]
+    (is (contains? by-title "eval") "tag on >=2 nodes -> concept")
+    (is (not (contains? by-title "pl"))  "2-char term filtered")
+    (is (not (contains? by-title "mcq")) "tag on only 1 node skipped")
+    (let [eval (by-title "eval")]
+      (is (= :concept (:type eval)))
+      (is (= :draft (:status eval)) "definition pending")
+      (is (= ["01A" "01B" "01C"] (get-in eval [:links :mentions])) "used-in links")
+      (is (seq (:provenance eval)) "grounded in source refs of using nodes")
+      (is (= "glossary:tag:eval" (:source_key eval)) "stable key -> idempotent rebuild"))))
 
 (deftest resolver-structural-links
   (let [card {:type :dataset :title "style-sft-1.6k" :aliases ["style-sft-1.6k"]

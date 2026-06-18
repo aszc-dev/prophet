@@ -7,6 +7,7 @@
             [slayer-kb.index.schema :as schema]
             [slayer-kb.index.query :as query]
             [slayer-kb.mcp.server :as mcp]
+            [slayer-kb.glossary :as glossary]
             [slayer-kb.ingest :as ingest]))
 
 (def ^:private db-path "kb.db")
@@ -23,6 +24,9 @@
                                (ingest/ingest-repo! dir config-name)
                                (ingest/ingest-repo! dir)))))
 
+(defn- glossary-build [_]
+  (println "glossary:" (pr-str (glossary/build!))))
+
 (defn- index-rebuild [_]
   (binding [query/*db-path* db-path]
     (println "index:" (pr-str (schema/rebuild! db-path)))))
@@ -38,6 +42,7 @@
 (def ^:private commands
   {"smoke"         smoke
    "ingest-repo"   ingest-repo
+   "glossary-build" glossary-build
    "index-rebuild" index-rebuild
    "search"        search
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})

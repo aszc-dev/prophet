@@ -1,0 +1,201 @@
+# Decisions (ADR)
+
+Settled decisions, with rationale and consequences, so they are not re-litigated.
+Format per record: Context / Decision / Consequences / Risks.
+
+---
+
+## ADR-001 — md + YAML for storage; org-roam as a personal client
+
+**Context.** The shared KB serves a ~162-person, web-first community and LLM
+clients. One power user (the maintainer) lives in Emacs/org-roam.
+
+**Decision.** Storage and interchange format is **md + YAML frontmatter**.
+org-roam is a *personal authoring/reading client*, not the storage format,
+bridged via the existing org→md toolchain (ox-hugo / pandoc), sharing the same
+stable `id`.
+
+**Consequences.** The whole md ecosystem (RAG chunkers, MCP knowledge tools, Hugo,
+LLM priors) works out of the box. The maintainer keeps org ergonomics
+(capture, refile, property inheritance, babel) locally and flattens on export.
+
+**Risks.** Round-trip fidelity org↔md at the property level; keep frontmatter
+flat enough to survive both directions.
+
+---
+
+## ADR-002 — Append-only + supersede; no biological decay
+
+**Context.** Compared against `greg00ry/the-brain`, whose headline feature is
+strength-based decay/pruning of memories.
+
+**Decision.** Memory is **append-only**; replaced facts are marked
+`superseded` with a pointer; removed sources become `archived`. Nothing is
+pruned or silently forgotten.
+
+**Consequences.** Full audit trail and lineage — which is the lab's product, not
+noise. Aligns with "lineage i disclosure". Storage grows monotonically (cheap for
+text).
+
+**Risks.** Synthesis must actively down-weight stale info (recency) so the
+"current state" stays readable despite never deleting history.
+
+---
+
+## ADR-003 — Provenance is mandatory
+
+**Context.** The lab's culture: "held-out albo nic", published a contaminated mix
+with full disclosure rather than hiding it. A KB without citations will not be
+trusted here.
+
+**Decision.** Every node and every synthesized claim carries >=1 exact
+provenance ref. No provenance → not written. Synthesis emits no uncited claim
+(hard guardrail, checked in CI).
+
+**Consequences.** Trust; reproducibility; the engine encodes the community's norm
+instead of fighting it.
+
+**Risks.** Extraction must always carry the ref through; a claim that loses its
+ref is dropped, which can lose signal — acceptable trade.
+
+---
+
+## ADR-004 — Hybrid retrieval (FTS + vector + graph), not pure vector
+
+**Context.** Corpus spans chat ↔ repo ↔ docs; many queries are relational /
+multi-hop. Pure vector RAG is competitive only on flat semantic lookups; graph
+traversal wins materially on multi-hop, at higher operational cost.
+
+**Decision.** Combine FTS5 (BM25) + sqlite-vec (cosine) + typed-graph traversal
+behind one `search`.
+
+**Consequences.** Multi-hop questions (decision → experiment → dataset → license)
+are answerable with traceable paths.
+
+**Risks.** More moving parts than a single vector index. Mitigated by keeping all
+three in one SQLite file.
+
+---
+
+## ADR-005 — Deterministic-first ingest; local small LLM only for gaps
+
+**Context.** Limited time/compute; no appetite for large experiments. Tier A is
+already structured.
+
+**Decision.** Parse what the source structures; invoke a small **local MLX** model
+only to fill genuine gaps (freeform extraction, summarization). Tier A should call
+the LLM almost never.
+
+**Consequences.** v0–v0.5 need no GPU/training; cheap, fast, offline.
+
+**Risks.** LLM JSON reliability on Tier B → strict schema validation, one retry,
+then review queue.
+
+---
+
+## ADR-006 — SQLite + FTS5 + sqlite-vec as the index
+
+**Context.** Want a single-file, local, rebuildable index with lexical + semantic
++ graph in one place; Clojure/Babashka stack.
+
+**Decision.** SQLite with FTS5 and the `sqlite-vec` extension. Index is derived,
+never authoritative.
+
+**Consequences.** Zero infra; trivial backup; rebuildable from md.
+
+**Risks.** **Loading the `sqlite-vec` extension from Clojure/Babashka.** Validate
+early: JVM via `next.jdbc` + sqlite-jdbc with `enable_load_extension`; if Babashka
+can't load it cleanly, run the vector path in a small JVM Clojure service and keep
+BB for the rest. Decide this in a spike before committing v0's index design.
+
+**Spike result (2026-06-18) — RESOLVED, Plan B confirmed.** Tested on macOS
+arm64 (sqlite-vec `vec0.dylib` v0.1.9):
+
+- ✅ **JVM Clojure path works fully.** `clojure` CLI + `org.xerial/sqlite-jdbc
+  3.49.1.0`, opening the connection with
+  `SQLiteConfig.enableLoadExtension(true)` then `select load_extension('vec0')`.
+  Verified: `vec_version() = v0.1.9`; `vec0` virtual table create + `match`/KNN
+  ordering; FTS5 (bundled in sqlite-jdbc) and `vec0` coexist in one **file-backed**
+  DB and survive close/reopen. This is the rebuildable single-file index from the
+  decision above.
+- ❌ **Babashka cannot load sqlite-vec — both BB sub-paths fail:**
+  - sqlite-jdbc as a BB JVM dep → `Unable to resolve classname:
+    org.sqlite.SQLiteConfig` (classes absent from BB's GraalVM native image; the
+    JNI-backed driver isn't loadable this way).
+  - `org.babashka/go-sqlite3` pod (0.2.4) → `load_extension(...)` returns **`not
+    authorized`** (mattn/go-sqlite3 ships with extension loading disabled).
+
+**Consequent stack decision.** The **`index/*` layer runs on the JVM** (Clojure +
+sqlite-jdbc). Babashka stays the task runner / CLI glue and hosts the source
+adapters and pure transforms (`extract/*`, `resolve/*` are pure fns over data,
+runnable from either runtime). BB tasks that touch the index shell out to a
+`clojure -M` entrypoint. The MCP server is JVM Clojure regardless. `vec0.dylib`
+is **arch-specific** — vendor per-arch (arm64 confirmed; x86_64 untested) and
+resolve the path at runtime.
+
+---
+
+## ADR-007 — Clojure + Babashka stack
+
+**Context.** Maintainer's primary expertise; scriptable; pure-fn friendly for
+transforms.
+
+**Decision.** Pipeline and tooling in Clojure + Babashka. Pure functions for
+transforms; IO (git, http, sqlite, fs) isolated at the edges. MCP server in
+Clojure.
+
+**Consequences.** Fast iteration for the maintainer; good fit for the
+data-transform shape of the pipeline.
+
+**Risks.** Some ecosystem pieces (sqlite-vec, MCP server libs) are less mature in
+Clojure — spike each before depending on it.
+
+---
+
+## ADR-008 — Governance: open reads, gated writes, reviewed new nodes
+
+**Context.** Shared graph for a large community; auto-writing invites junk.
+
+**Decision.** MCP reads are open. Writes are provenance-gated. New nodes/links go
+to a **review queue**, not the live graph. Observations with valid provenance may
+auto-append.
+
+**Consequences.** The canonical graph stays clean; contributions are still cheap.
+
+**Risks.** Review becomes a bottleneck → keep the queue lightweight (PR-style),
+and let well-formed provenance-bearing observations through automatically.
+
+---
+
+## ADR-009 — Embedding dimension pinned at 1024; model swap via MRL truncation
+
+**Context.** The `vec_nodes` table fixes a vector dimension at DDL time
+(`vec0(... embedding FLOAT[N])`). Changing `N` later means dropping and
+rebuilding the vector table against a re-embedded corpus — a real migration we
+want to avoid as the model evolves (0.6B → 4B/8B as the corpus and quality bar
+grow).
+
+**Decision.** Pin **`N = 1024`**. v0 default embedder is
+**`mlx-community/Qwen3-Embedding-0.6B-8bit`** (1024 native dims; 8-bit MLX quant —
+negligible quality loss at this size, lower memory), served over an
+OpenAI-compatible `/v1/embeddings` endpoint. The whole Qwen3-Embedding family
+supports **Matryoshka (MRL)**, so a later swap to 4B (2560) / 8B (4096) keeps the
+schema: request `dimensions: 1024` (or truncate client-side) for a minimal quality
+drop and no migration. Stub vs real embeddings is therefore a **data** decision,
+never a schema one.
+
+**Inert-stub rule.** When the embedding endpoint is absent, v0 may write
+placeholder vectors **only** to exercise the write path. Stub vectors are
+**inert**: the hybrid blend weights `vec` at 0 and they never enter ranking. A
+deterministic hash vector has no cosine meaning; blending it poisons results.
+Embeddings are off the v0 critical path (FTS + exact + graph carry the acceptance
+queries); real `vec` becomes load-bearing at Tier B (Discord fuzzy resolver).
+
+**Consequences.** Schema survives every planned model change; v0 ships whether or
+not the endpoint is up; the index DDL can hardcode `FLOAT[1024]` now.
+
+**Risks.** Server-side MRL can be finicky — e.g. vLLM returns the full dimension
+by default and 400s on a `dimensions` request unless launched with
+`--hf-overrides '{"is_matryoshka": true, ...}'`. Verify the chosen MLX server
+honors `dimensions: 1024` before pinning a larger model; until then keep 0.6B,
+whose native width already is 1024.

@@ -1,0 +1,29 @@
+;; Babashka task runner. The index layer requires the JVM (sqlite-vec cannot load
+;; under Babashka — see decisions.md ADR-006), so index-touching tasks shell out
+;; to `clojure -M:run`. Pure transforms and adapters can run under either runtime.
+{:tasks
+ {:requires ([babashka.process :as p])
+
+  ingest:repo
+  {:doc "Incremental ingest of a source repo into kb/ — clojure -M:run ingest-repo <repo-path>"
+   :task (apply p/shell "clojure" "-M:run" "ingest-repo" *command-line-args*)}
+
+  index:rebuild
+  {:doc "Rebuild the SQLite/vector index from kb/"
+   :task (p/shell "clojure" "-M:run" "index-rebuild")}
+
+  serve:mcp
+  {:doc "Start the MCP server (stdio)"
+   :task (p/shell "clojure" "-M:run" "serve-mcp")}
+
+  search
+  {:doc "Query the index from the CLI — bb search <terms...>"
+   :task (apply p/shell "clojure" "-M:run" "search" *command-line-args*)}
+
+  smoke
+  {:doc "Spike check: confirm the JVM index layer loads sqlite-vec + FTS5"
+   :task (p/shell "clojure" "-M:run" "smoke")}
+
+  test
+  {:doc "Run the test suite (JVM)"
+   :task (p/shell "clojure" "-M:test")}}}

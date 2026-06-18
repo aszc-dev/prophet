@@ -1,0 +1,14 @@
+# derived index — rebuildable from kb/ (invariant #1), never source of truth
+kb.db
+*.db
+
+# clojure / tooling
+.cpcache/
+.clj-kondo/
+target/
+
+# local test scaffolding (a throwaway source git repo for manual ingest)
+/fixtures/
+
+# macOS
+.DS_Store

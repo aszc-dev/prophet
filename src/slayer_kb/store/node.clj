@@ -5,6 +5,7 @@
    pointer; nothing is hard-deleted (see decisions.md ADR-002/003)."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [clj-yaml.core :as yaml]
             [slayer-kb.util :as util]))
 
@@ -81,23 +82,51 @@
     (assoc node :id (:id existing))
     (assoc node :id (or (:id node) (util/ulid)))))
 
-(defn upsert!
-  "Materialize a node to disk. Computes content-hash over the meaningful payload;
-   if an existing note for the same source key has the same hash, skips the write
-   (no-op re-ingest). Returns {:status :created|:updated|:unchanged :node :file}."
-  [node]
-  (let [node    (ensure-id node)
-        payload (pr-str (select-keys node [:type :title :status :provenance
-                                           :links :moc :tags :aliases :observations]))
-        hash    (util/sha256 payload)
-        node    (assoc node :content_hash hash)
-        file    (node-path node)
-        existing (when (.exists file) (md->node (slurp file)))]
-    (cond
-      (= (:content_hash existing) hash)
-      {:status :unchanged :node node :file file}
+(defn- canonical
+  "Representation-independent form for hashing. Collapses the two shapes a node can
+   take — fresh extraction (vectors, plain maps, keyword values like :git) and
+   clj-yaml parse output (LazySeq, OrderedMap, string values like \"git\") — to one
+   canonical shape, so the content-hash does not flip between ingest passes.
+   Keywords (keys and values) become their name; seqs become vectors; maps become
+   key-sorted."
+  [x]
+  (walk/postwalk
+   (fn [n]
+     (cond
+       (keyword? n)                             (name n)
+       (and (sequential? n) (not (vector? n)))  (vec n)
+       (map? n)                                 (into (sorted-map) n)
+       :else n))
+   x))
 
-      :else
+(defn merge-observations
+  "Append-only union of observation lists, deduped by [ref text], existing first.
+   Observations are never replaced (invariant #3): a re-extract of one source must
+   not drop observations another source appended to the same node."
+  [existing-obs new-obs]
+  (let [seen (set (map (juxt :ref :text) existing-obs))]
+    (into (vec existing-obs)
+          (remove #(seen [(:ref %) (:text %)]) new-obs))))
+
+(defn upsert!
+  "Materialize a node to disk. Observations merge append-only with any already on
+   disk; the rest of the node reflects current state. Content-hash over the
+   meaningful payload skips no-op writes. Returns {:status :created|:updated|
+   :unchanged :node :file}."
+  [node]
+  (let [node     (ensure-id node)
+        file     (node-path node)
+        existing (when (.exists file) (md->node (slurp file)))
+        node     (cond-> node
+                   existing (assoc :observations
+                                   (merge-observations (:observations existing)
+                                                       (:observations node))))
+        payload  (pr-str (canonical (select-keys node [:type :title :status :provenance
+                                                       :links :moc :tags :aliases :observations])))
+        hash     (util/sha256 payload)
+        node     (assoc node :content_hash hash)]
+    (if (= (:content_hash existing) hash)
+      {:status :unchanged :node node :file file}
       (let [node (assoc node :updated (str (java.time.Instant/now)))]
         (io/make-parents file)
         (spit file (node->md node))

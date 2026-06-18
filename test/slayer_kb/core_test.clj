@@ -119,6 +119,43 @@
                              existing)]
     (is (= "01EXISTING0000000000000000" (:id n)) "id reused via source_key")))
 
+(defn- with-temp-kb [f]
+  (let [tmp (str (System/getProperty "java.io.tmpdir") "/kb-test-" (System/nanoTime))]
+    (binding [store/*kb-root* tmp]
+      (try (f) (finally (doseq [x (reverse (file-seq (io/file tmp)))] (.delete x)))))))
+
+(deftest upsert-idempotent-across-reparse
+  ;; regression: clj-yaml parses a stored node back as LazySeq/OrderedMap with
+  ;; string scalars (:git -> "git"); the canonical content-hash must treat that as
+  ;; identical to the fresh keyword/vector form, so re-upsert is a no-op.
+  (with-temp-kb
+    (fn []
+      (let [node {:type :benchmark :title "LLMzSzŁ" :status :current
+                  :source_key "r:b#llmzszl" :aliases ["llmzszl" "LLMzSzŁ"]
+                  :provenance [{:source :git :ref "git:r@s:b#llmzszl"}]
+                  :observations [{:date "2026-06-04" :ref "git:r@s:b#llmzszl" :text "Q9: 58.2"}]}
+            r1   (store/upsert! node)
+            back (store/md->node (slurp (:file r1)))]
+        (is (= :created (:status r1)))
+        (is (= :unchanged (:status (store/upsert! back)))
+            "re-upsert of the reparsed node must not churn")))))
+
+(deftest upsert-merges-observations-append-only
+  ;; invariant #3: a re-extract from one source must not drop observations another
+  ;; source appended to the same node.
+  (with-temp-kb
+    (fn []
+      (let [base {:type :benchmark :title "B" :status :current :source_key "r:b#x"
+                  :provenance [{:source :git :ref "git:r@s:b#x"}]}
+            _ (store/upsert! (assoc base :observations
+                                    [{:date "" :ref "git:r@s:card#x" :text "license: MIT"}]))
+            r (store/upsert! (assoc base :observations
+                                    [{:date "2026-06-04" :ref "git:r@s:lb#x" :text "Q9: 58.2"}]))
+            n (store/md->node (slurp (:file r)))]
+        (is (= :updated (:status r)))
+        (is (= #{"license: MIT" "Q9: 58.2"} (set (map :text (:observations n))))
+            "card observation preserved, leaderboard observation appended")))))
+
 (deftest deterministic-id-reuse
   (let [tmp (str (System/getProperty "java.io.tmpdir") "/kb-test-" (System/nanoTime))]
     (binding [store/*kb-root* tmp]

@@ -36,8 +36,14 @@
         (str "https://github.com/" org "/" repo "/blob/" sha "/" path frag)))
     :else nil))
 
-(defn- ref-label [ref]
-  (-> ref (str/replace #"^git:" "") (str/replace #"^https?://" "")))
+(defn- ref-label
+  "Compact display label for a provenance ref: drop the scheme and shorten a git
+   sha to 7 chars (the full sha stays in the link URL)."
+  [ref]
+  (-> ref
+      (str/replace #"^git:" "")
+      (str/replace #"^https?://" "")
+      (str/replace #"@([0-9a-f]{7})[0-9a-f]+:" "@$1:")))
 
 ;; --- graph maps ------------------------------------------------------------
 
@@ -84,13 +90,15 @@
 
 (defn- provenance-md [provenance]
   (when (seq provenance)
-    (str "## Provenance\n\n<div class=\"prov\">\n"
+    ;; blank lines around the list so Goldmark parses it as markdown, not as the
+    ;; literal contents of the raw-HTML <div> block.
+    (str "## Provenance\n\n<div class=\"prov\">\n\n"
          (str/join "\n"
                    (for [{:keys [ref]} provenance]
                      (let [url (prov->url ref)]
                        (str "- " (if url (str "[`" (ref-label ref) "`](" url ")")
                                      (str "`" (ref-label ref) "`"))))))
-         "\n</div>\n")))
+         "\n\n</div>\n")))
 
 (defn- related-md [links meta]
   (let [groups (for [[rel dsts] links :when (seq dsts)]

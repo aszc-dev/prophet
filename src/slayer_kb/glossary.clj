@@ -1,57 +1,200 @@
 (ns slayer-kb.glossary
   "Deterministic glossary derivation: a `concept` node per recurring vocabulary
-   term, linked to every node that uses it (the roam-enabler). Candidate terms are
-   the lab's own tags appearing across >=2 nodes — high precision, no LLM. Each
-   concept is grounded: its provenance points to the source refs of the nodes that
-   use it (provenance-or-nothing applies to the glossary too). A polished 1-2
-   sentence definition is left to an optional, grounded, draft-status LLM gap-fill
-   (deferred); the used-in links already make terms navigable."
+   term, linked to the nodes that use it (the roam-enabler) AND, crucially, to the
+   nodes that DEFINE it. Three deterministic candidate sources, merged per term:
+
+   - tags        — the lab's own tags on >=2 nodes (high precision, no prose).
+   - entities    — benchmark/dataset/model/axis titles + aliases (the real jargon;
+                   the entity's own `opis`/state is its definition).
+   - jargon      — CamelCase / ACRONYM / hyphenated technical tokens in node prose
+                   (LLMzSzŁ, EntiGraph, KLEJ, DoRA, held-out…), the jargon that is
+                   never a tag.
+
+   A term's links split by strength: `:defined-by` (entity-self + any node whose
+   title is about the term) vs weak `:mentions`. Grounding (`define!`) draws
+   passages from the defining nodes — that is what lets a definition reach real
+   explanatory prose instead of bare category tags. Provenance-or-nothing applies:
+   a concept with no source ref is not emitted. A polished 1-2 sentence definition
+   is an optional, grounded, draft-status LLM gap-fill (see `define!`)."
   (:require [clojure.string :as str]
             [slayer-kb.index.chat :as chat]
-            [slayer-kb.store.node :as store]))
+            [slayer-kb.store.node :as store])
+  (:import [java.text Normalizer Normalizer$Form]
+           [java.util.regex Pattern]))
 
 (def ^:private min-uses 2)
 (def ^:private min-len 3)   ; drops bare language codes (pl, en)
+(def ^:private entity-types #{"benchmark" "dataset" "model" "axis"})
 
-(defn- term-usage
-  "Map term -> set of node-ids that carry it as a tag."
+;; --- term normalization ----------------------------------------------------
+
+(defn- fold
+  "Diacritic-folded, lower-cased grouping key. Collapses the surface forms of one
+   term (e.g. the title `LLMzSzŁ` and the ascii alias `llmzszl`) onto one key.
+   NFD strips combining diacritics; ł/Ł are folded explicitly (no NFD form)."
+  [s]
+  (-> (Normalizer/normalize (str s) Normalizer$Form/NFD)
+      (str/replace #"\p{M}" "")
+      (str/replace #"[łŁ]" "l")
+      str/lower-case str/trim))
+
+(defn- token-present?
+  "True when `folded-term` occurs as a whole token in `folded-text` (not as a
+   substring of a larger word). Letters/digits bound the token; hyphens inside the
+   term are honoured (held-out matches `held-out`, not `withheld-output`)."
+  [folded-term folded-text]
+  (boolean
+   (and (seq folded-term) (seq folded-text)
+        (re-find (re-pattern (str "(?<![\\p{L}\\p{N}])"
+                                  (Pattern/quote folded-term)
+                                  "(?![\\p{L}\\p{N}])"))
+                 folded-text))))
+
+;; --- prose access ----------------------------------------------------------
+
+(defn- state-text
+  "Prose from a node's `## State` section, or nil when empty/placeholder. Falls
+   back to a fresh node's `:state` (md->node keeps the raw body, not :state)."
+  [node]
+  (or (some-> (:body node)
+              (->> (re-find #"(?s)## State[^\n]*\n+(.*?)\n+## Observations"))
+              second str/trim
+              (as-> s (when-not (or (str/blank? s) (= s "_pending synthesis_")) s)))
+      (some-> (:state node) str/trim not-empty)))
+
+(defn- scan-text
+  "Text scanned for jargon tokens / mentions: title + state + observation texts.
+   Excludes refs so provenance URLs do not seed bogus acronyms."
+  [node]
+  (str/join "\n" (remove str/blank?
+                         (concat [(:title node)] [(state-text node)]
+                                 (map :text (:observations node))))))
+
+;; --- jargon detection ------------------------------------------------------
+
+(def ^:private camel-re   #"[\p{L}\p{N}]*\p{Ll}\p{Lu}[\p{L}\p{N}]*")  ; EntiGraph, DoRA, LLMzSzŁ
+(def ^:private acronym-re #"\p{Lu}{3,}")                              ; KLEJ, RLVR, ORPO, MCQ
+(def ^:private hyphen-re  #"\p{Ll}{2,}(?:-\p{Ll}{2,})+")              ; held-out, reading-comprehension
+
+(def ^:private stop-acronyms
+  "Common all-caps words (English / Polish function & heading words) that the
+   acronym lane would otherwise mint as bogus concepts. Folded forms."
+  #{"and" "not" "only" "all" "for" "the" "nie" "tak" "first" "pass" "data" "json"
+    "clean" "contaminated" "czysto" "generatywna" "license" "lineage" "faza" "core"
+    "note" "proxy" "done" "todo" "yes" "raw" "via" "non" "tylko" "oraz" "lub"})
+
+(defn- surfaces-by-lane
+  "{:camel #{..} :acronym #{..} :hyphen #{..}} jargon tokens in `text` (>= min-len).
+   Acronyms in the stoplist are dropped at the source."
+  [text]
+  {:camel   (->> (re-seq camel-re text)   (filter #(>= (count %) min-len)) set)
+   :acronym (->> (re-seq acronym-re text) (filter #(>= (count %) min-len))
+                 (remove #(stop-acronyms (fold %))) set)
+   :hyphen  (->> (re-seq hyphen-re text)  (filter #(>= (count %) min-len)) set)})
+
+;; --- candidate assembly ----------------------------------------------------
+
+(defn- entity-surfaces
+  "Surface forms a node contributes as an entity term: its title + aliases when it
+   is an entity-typed node. The node defines these terms (its opis is the def)."
+  [node]
+  (when (entity-types (name (:type node)))
+    (->> (cons (:title node) (:aliases node)) (keep identity) (map str)
+         (filter #(>= (count %) min-len)))))
+
+(defn- collect-vocabulary
+  "fold-key -> {:surfaces {surface count} :tag? :entity? :camel? :acronym? :hyphen?}.
+   The union of every term-like surface seen across the store, before linking. The
+   lane flags drive promotion: coined jargon (camel) and named entities/tags pass
+   on their own, but hyphenated category-looking terms must also have a defining
+   node (handled in `candidates`), keeping structured category labels out."
   [nodes]
-  (reduce (fn [m {:keys [id tags]}]
-            (reduce (fn [m t] (update m (str/lower-case (str t)) (fnil conj #{}) id))
-                    m tags))
-          {} nodes))
+  (reduce
+   (fn [voc node]
+     (let [add  (fn [voc surface flag]
+                  (-> voc
+                      (update-in [(fold surface) :surfaces surface] (fnil inc 0))
+                      (assoc-in  [(fold surface) flag] true)))
+           lane (surfaces-by-lane (scan-text node))]
+       (as-> voc v
+         (reduce #(add %1 (str %2) :tag?) v
+                 (filter #(>= (count (str %)) min-len) (:tags node)))
+         (reduce #(add %1 %2 :entity?)  v (entity-surfaces node))
+         (reduce #(add %1 %2 :camel?)   v (:camel lane))
+         (reduce #(add %1 %2 :acronym?) v (:acronym lane))
+         (reduce #(add %1 %2 :hyphen?)  v (:hyphen lane)))))
+   {} nodes))
+
+(defn- display-surface
+  "Canonical display form for a term: most upper-case-rich surface wins (LLMzSzŁ
+   over llmzszl), then longest, then alphabetical — deterministic."
+  [surfaces]
+  (->> (keys surfaces)
+       (sort-by (fn [s] [(- (count (re-seq #"\p{Lu}" s))) (- (count s)) s]))
+       first))
+
+(defn- links-for
+  "Split the nodes related to `fold-key` into defining vs mentioning ids.
+   - defined-by: entity-self nodes (an entity whose own title/alias is the term)
+     and any node whose TITLE is about the term — their prose grounds the def.
+   - mentions: defined-by ∪ tag-carriers ∪ nodes whose prose names the term."
+  [fold-key entity? nodes]
+  (let [defines  (for [n nodes
+                       :when (or (and entity? (entity-types (name (:type n)))
+                                      (some #(= fold-key (fold %))
+                                            (cons (:title n) (:aliases n))))
+                                 (token-present? fold-key (fold (:title n))))]
+                   (:id n))
+        mentions (for [n nodes
+                       :when (or (some #(= fold-key (fold %)) (:tags n))
+                                 (token-present? fold-key (fold (scan-text n))))]
+                   (:id n))]
+    {:defined-by (vec (sort (distinct defines)))
+     :mentions   (vec (sort (distinct (concat defines mentions))))}))
 
 (defn candidates
-  "Glossary concepts to (re)materialize from the current store. One per term used
-   by >=2 nodes, long enough to be a real term. Keyed by a stable glossary
-   source_key, so re-running refreshes used-in links idempotently."
+  "Glossary concepts to (re)materialize from the current store. One per term that
+   appears in >=2 nodes and is term-like (tag, entity, or detected jargon). Keyed
+   by a stable source_key (`glossary:tag:<term>` for tag-sourced terms — preserving
+   existing ids — else `glossary:term:<fold>`), so re-running is idempotent."
   [nodes]
-  (let [by-id (into {} (map (juxt :id identity) nodes))
-        usage (term-usage nodes)]
-    (for [[term ids] usage
-          :when (and (>= (count ids) min-uses)
-                     (>= (count term) min-len))
-          :let [users (keep by-id ids)
-                refs  (->> users
+  ;; Concept nodes are derived from these sources — never source a concept from a
+  ;; concept, or re-running build! churns as concepts accrete into the vocabulary.
+  (let [nodes (remove #(= "concept" (name (:type %))) nodes)
+        by-id (into {} (map (juxt :id identity) nodes))
+        voc   (collect-vocabulary nodes)]
+    (for [[fk {:keys [surfaces tag? entity? camel? acronym? hyphen?]}] voc
+          :let  [{:keys [defined-by mentions]} (links-for fk entity? nodes)]
+          ;; promotion: tags, named entities, and coined jargon (CamelCase / non-stop
+          ;; acronyms) stand on their own; hyphenated terms must also have a defining
+          ;; node, which filters structured category labels (eval-pl-core, no-answer).
+          :when (and (>= (count mentions) min-uses)
+                     (or tag? entity? camel? acronym?
+                         (and hyphen? (seq defined-by))))
+          :let  [display (display-surface surfaces)
+                 ;; provenance: defining refs first, then mention refs
+                 refs (->> (concat defined-by mentions)
+                           (keep by-id) distinct
                            (keep #(-> % :provenance first :ref))
                            distinct (take 8) vec)]
           :when (seq refs)]                ; provenance-or-nothing
       {:type        :concept
-       :title       term
-       :status      :draft               ; definition pending human/LLM grounding
+       :title       display
+       :status      :draft
        :moc         ["glosariusz"]
        :tags        []
        :visibility  :public
-       :source_key  (str "glossary:tag:" term)
-       :aliases     [term]
+       :source_key  (if tag? (str "glossary:tag:" fk) (str "glossary:term:" fk))
+       :aliases     (vec (sort (keys surfaces)))
        :provenance  (mapv (fn [r] {:source :git :ref r}) refs)
-       :links       {:mentions (vec (sort ids))}   ; used-in
+       :links       (cond-> {:mentions mentions}
+                      (seq defined-by) (assoc :defined-by defined-by))
        :state       nil
        :observations []})))
 
 (defn build!
   "Derive glossary concept nodes from the current note store. Append-only via
-   upsert!; re-running is a no-op. Returns a write tally."
+   upsert!; re-running is a verified no-op. Returns a write tally."
   []
   (let [nodes (mapv :node (store/all-notes))
         cands (candidates nodes)
@@ -61,37 +204,46 @@
 
 ;; --- optional grounded definitions (LLM gap-fill, ADR-005) -----------------
 
-(defn- state-text
-  "Prose from a parsed node's `## State` section, or nil when empty/placeholder.
-   md->node keeps the raw body but does not structure it, so we slice it here."
-  [body]
-  (some-> body
-          (->> (re-find #"(?s)## State[^\n]*\n+(.*?)\n+## Observations"))
-          second str/trim
-          (as-> s (when-not (or (str/blank? s) (= s "_pending synthesis_")) s))))
-
 (defn- grounding-units
-  "Ref-bearing text units from a using node: its State prose (attributed to the
-   node's primary provenance ref) and each observation (its own ref)."
+  "Ref-bearing text units from a node: its State prose (attributed to the node's
+   primary provenance ref) and each observation (its own ref)."
   [node]
   (let [prov-ref (-> node :provenance first :ref)]
     (concat
-     (when-let [s (and prov-ref (state-text (:body node)))]
-       [{:ref prov-ref :text s}])
+     (when-let [s (and prov-ref (state-text node))] [{:ref prov-ref :text s}])
      (for [{:keys [ref text]} (:observations node)
            :when (and (seq (str ref)) (seq (str text)))]
        {:ref ref :text text}))))
 
+(defn- defining-passages
+  "Passages from a node that DEFINES the term: its title and State prose (the
+   node is about the term, so these ground it unconditionally) plus any
+   observation that names the term."
+  [fold-term node]
+  (let [prov-ref (-> node :provenance first :ref)]
+    (when prov-ref
+      (->> (concat
+            [{:ref prov-ref :text (:title node)}]
+            (when-let [s (state-text node)] [{:ref prov-ref :text s}])
+            (for [{:keys [ref text]} (:observations node)
+                  :when (and (seq (str ref)) (token-present? fold-term (fold text)))]
+              {:ref ref :text text}))
+           (filter #(seq (str (:text %))))))))
+
 (defn passages-for
-  "Grounding passages for `term`: the text units across `users` that actually
-   mention the term (case-insensitive), each carrying its source ref. These — and
-   only these — are fed to the model; a term that is merely tagged but never
-   discussed yields no passages, so it stays undefined (no fabrication)."
-  [term users]
-  (let [needle (str/lower-case term)]
-    (->> users
-         (mapcat grounding-units)
-         (filter #(str/includes? (str/lower-case (:text %)) needle))
+  "Grounding passages for a concept. From its `:defined-by` nodes: title + state +
+   term-naming observations (the link already establishes relevance). From its
+   weak `:mentions`: only the units that name the term. A term that is merely
+   mentioned, never defined or discussed, yields nothing -> stays undefined."
+  [concept by-id]
+  (let [ft        (fold (:title concept))
+        def-ids   (set (get-in concept [:links :defined-by]))
+        def-nodes (keep by-id def-ids)
+        men-nodes (keep by-id (remove def-ids (get-in concept [:links :mentions])))]
+    (->> (concat (mapcat #(defining-passages ft %) def-nodes)
+                 (for [n men-nodes, u (grounding-units n)
+                       :when (token-present? ft (fold (:text u)))]
+                   u))
          distinct vec)))
 
 (defn- definition-messages [term passages]
@@ -120,6 +272,11 @@
    (rejects hallucinated provenance)."
   [term passages]
   (let [supplied (set (map :ref passages))
+        ;; The model is inconsistent about ref format: sometimes the bare ref,
+        ;; sometimes the whole "[ref] text" passage line echoed back. Accept a cited
+        ;; ref when it contains a supplied bare ref as a substring — that still
+        ;; rejects fabricated provenance (a supplied git URL won't appear by chance).
+        cites?   (fn [r] (some #(str/includes? (str r) %) supplied))
         resp     (chat/complete-json (definition-messages term passages))]
     (when (map? resp)
       (let [{:keys [definition grounded refs]} resp
@@ -128,14 +285,14 @@
                    (seq definition)
                    (<= (count definition) 400)
                    (seq refs)
-                   (every? supplied refs))
+                   (every? cites? refs))
           definition)))))
 
 (defn define!
   "Optional grounded gap-fill: a 1-2 sentence draft definition per `concept` that
-   lacks one, derived strictly from passages where the term appears in its using
-   nodes. Writes through upsert! (append-only, canonical hash, status stays
-   :draft). Discipline:
+   lacks one, derived strictly from the passages of its defining/mentioning nodes.
+   Writes through upsert! (append-only, canonical hash, status stays :draft).
+   Discipline:
    - Generate-once / idempotent: a concept that already has a definition is SKIPPED,
      never regenerated — LLM output is non-deterministic, so regeneration would
      churn the content-hash on every run. Re-running define! is a verified no-op.
@@ -156,8 +313,7 @@
            (update acc :skipped (fnil inc 0))
 
            :else
-           (let [users    (keep by-id (get-in c [:links :mentions]))
-                 passages (passages-for (:title c) users)
+           (let [passages (passages-for c by-id)
                  def-text (when (seq passages) (gen-definition (:title c) passages))]
              (if def-text
                (do (store/upsert! (assoc c :definition def-text))

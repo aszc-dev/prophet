@@ -61,6 +61,28 @@ updated: 2026-06-17T14:02:00Z
 - 2026-06-17 [discord:.../123] LLMzSzŁ 65.0 vs base 58.5 (likelihood, n=400)
 ```
 
+### `content_hash` — canonical, representation-independent
+
+`content_hash` drives incremental sync: an unchanged hash skips the write
+(`:unchanged`). It is computed over the meaningful payload only (`type`, `title`,
+`status`, `provenance`, `links`, `moc`, `tags`, `aliases`, `definition`,
+`observations`) — never over `updated`, `id`, or the derived hashes themselves.
+
+The payload is first reduced to a **canonical form** so the hash does not flip
+between the two shapes a node legitimately takes:
+
+- **fresh extraction** — keyword keys/values (`:source :git`), Clojure vectors,
+  plain maps; and
+- **clj-yaml parse-back** — string scalars (`"git"`), `LazySeq`, `OrderedMap`.
+
+Canonicalization: keywords (keys and values) → their name; non-vector seqs →
+vectors; maps → key-sorted. Reference impl: `store.node/canonical`.
+
+> **Rule for any NEW source adapter (Discord next):** hash via this same canonical
+> form, never the raw shape. Skipping it reintroduces the multi-source re-ingest
+> churn (keyword-vs-string, LazySeq-vs-vector) that #1's no-op re-ingest depends
+> on. A re-ingest that is not a verified no-op (`unchanged N`) is the symptom.
+
 ### Node types
 
 `experiment`, `dataset`, `mix`, `benchmark`, `axis`, `model`, `recipe`,

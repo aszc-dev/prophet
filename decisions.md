@@ -184,6 +184,19 @@ schema: request `dimensions: 1024` (or truncate client-side) for a minimal quali
 drop and no migration. Stub vs real embeddings is therefore a **data** decision,
 never a schema one.
 
+**Serving (operational).** The endpoint is **omlx** (`omlx serve`, model symlinked
+under `~/.omlx/models/<org>/<name>/`), **not** `mlx_lm.server` — the latter exposes
+only completions, not `/v1/embeddings`. Two gotchas, both load-bearing:
+
+- `SLAYER_EMBED_URL` must use **`127.0.0.1`**, never `localhost`. The JVM
+  HttpClient resolves `localhost` to IPv6 `::1`, but the MLX servers bind IPv4 only
+  → `ConnectException`.
+- omlx requires a bearer token — set `SLAYER_EMBED_API_KEY`.
+
+The optional grounded-definition gap-fill (glossary) uses the **same conventions**
+on its own chat endpoint: `SLAYER_CHAT_URL` (same `127.0.0.1` rule), `SLAYER_CHAT_MODEL`
+(default `mlx-community/Qwen3-8B-4bit`), `SLAYER_CHAT_API_KEY`.
+
 **Inert-stub rule.** When the embedding endpoint is absent, v0 may write
 placeholder vectors **only** to exercise the write path. Stub vectors are
 **inert**: the hybrid blend weights `vec` at 0 and they never enter ranking. A

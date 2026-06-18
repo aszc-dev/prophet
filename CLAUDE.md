@@ -52,10 +52,16 @@ Source priority: **curated artifacts first** (the lab's Hugo site + the
 
 ## Current state (2026-06-18)
 
-**v0 implemented** (Tier A, repo only — read path). Five design docs live at the
-**repo root**, not in a `docs/` subdir. Code is under `src/slayer_kb/`; the note
-store is `kb/`; `kb.db` is the derived index; `fixtures/recipes/` is a test source
-repo. Not yet a git repo itself.
+**v0 + v0.5 implemented.** Git repo: **github.com/aszc-dev/prophet** (private),
+branch `main`. See `HANDOFF.md` for the full pick-up brief. Five design docs live at
+the **repo root**, not in a `docs/` subdir (`docs/` holds only the v0.5 brief). Code
+is under `src/slayer_kb/`; the note store is `kb/` (75 real nodes from
+`slayerlabs/slayer`); `kb.db` is the derived index; `web/` is the Hugo site;
+`fixtures/recipes/` is a test source repo.
+
+v0.5 adds: glossary concept nodes (`bb glossary:build`) and a roamable Hugo web
+(`bb web:build`) with provenance→GitHub links, backlinks, ego-graphs, MOC pages,
+public/internal split.
 
 What works end-to-end (all tests green — `bb test`):
 - `bb ingest:repo <repo>` — RepoAdapter -> per-kind extractors (`log` `page` `card`

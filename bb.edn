@@ -24,6 +24,10 @@
   {:doc "Generate + build the roamable Hugo site from kb/"
    :task (p/shell "clojure" "-M:run" "web-build")}
 
+  eval:fidelity
+  {:doc "Layer-1 extraction-quality scorecard over kb/ (stub/dangling observations; no index, no LLM)"
+   :task (p/shell "clojure" "-M:run" "eval-fidelity")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

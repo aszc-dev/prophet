@@ -9,6 +9,7 @@
             [slayer-kb.mcp.server :as mcp]
             [slayer-kb.glossary :as glossary]
             [slayer-kb.web.build :as web]
+            [slayer-kb.eval.fidelity :as fidelity]
             [slayer-kb.ingest :as ingest]))
 
 (def ^:private db-path "kb.db")
@@ -34,6 +35,9 @@
 (defn- web-build [_]
   (println "web:" (pr-str (web/build!))))
 
+(defn- eval-fidelity [_]
+  (fidelity/scan!))
+
 (defn- index-rebuild [_]
   (binding [query/*db-path* db-path]
     (println "index:" (pr-str (schema/rebuild! db-path)))))
@@ -54,6 +58,7 @@
    "index-rebuild" index-rebuild
    "search"        search
    "web-build"     web-build
+   "eval-fidelity" eval-fidelity
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})
 
 (defn -main [& args]

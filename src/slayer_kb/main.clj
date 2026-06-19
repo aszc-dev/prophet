@@ -10,6 +10,7 @@
             [slayer-kb.glossary :as glossary]
             [slayer-kb.web.build :as web]
             [slayer-kb.eval.fidelity :as fidelity]
+            [slayer-kb.eval.retrieval :as retrieval]
             [slayer-kb.ingest :as ingest]))
 
 (def ^:private db-path "kb.db")
@@ -38,6 +39,10 @@
 (defn- eval-fidelity [_]
   (fidelity/scan!))
 
+(defn- eval-retrieval [_]
+  (binding [query/*db-path* db-path]
+    (retrieval/scan!)))
+
 (defn- index-rebuild [_]
   (binding [query/*db-path* db-path]
     (println "index:" (pr-str (schema/rebuild! db-path)))))
@@ -59,6 +64,7 @@
    "search"        search
    "web-build"     web-build
    "eval-fidelity" eval-fidelity
+   "eval-retrieval" eval-retrieval
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})
 
 (defn -main [& args]

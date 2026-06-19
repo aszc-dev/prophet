@@ -28,6 +28,10 @@
   {:doc "Layer-1 extraction-quality scorecard over kb/ (stub/dangling observations; no index, no LLM)"
    :task (p/shell "clojure" "-M:run" "eval-fidelity")}
 
+  eval:retrieval
+  {:doc "Layer-4 retrieval scorecard: gold queries -> recall@k / MRR (hybrid needs SLAYER_EMBED_*)"
+   :task (p/shell "clojure" "-M:run" "eval-retrieval")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

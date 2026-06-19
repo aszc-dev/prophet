@@ -17,5 +17,8 @@ web/public/
 web/resources/
 web/.hugo_build.lock
 
+# local Claude Code session state
+.claude/
+
 # macOS
 .DS_Store

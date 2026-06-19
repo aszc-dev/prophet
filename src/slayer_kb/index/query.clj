@@ -20,53 +20,121 @@
 
 ;; --- FTS query string ------------------------------------------------------
 
-(defn- fts-match
-  "Build an FTS5 MATCH expression: OR of quoted tokens (quotes escaped)."
+(defn- fts-tokens
+  "Quoted, escaped tokens of a query (blanks dropped)."
   [query]
   (->> (str/split (str/trim query) #"\s+")
        (remove str/blank?)
-       (map #(str "\"" (str/replace % "\"" "\"\"") "\""))
-       (str/join " OR ")))
+       (mapv #(str "\"" (str/replace % "\"" "\"\"") "\""))))
+
+(defn- fts-match
+  "FTS5 MATCH expression over all columns: OR of quoted tokens."
+  [query]
+  (str/join " OR " (fts-tokens query)))
+
+(defn- title-match
+  "FTS5 MATCH expression scoped to the title column: a node whose TITLE carries the
+   query terms is high-signal (e.g. an exact entity name), independent of how often
+   the terms appear in bodies. nil when the query has no usable tokens."
+  [query]
+  (when-let [toks (seq (fts-tokens query))]
+    (str "{title} : (" (str/join " OR " toks) ")")))
 
 ;; --- search ----------------------------------------------------------------
+;;
+;; Each lane (exact alias, FTS bm25, vector KNN) produces an INDEPENDENT ranked
+;; list of candidate ids; the union is fused with Reciprocal Rank Fusion (ADR:
+;; milestone #8). RRF is rank-based and scale-invariant, so the vector lane EXPANDS
+;; recall (adds cross-lingual candidates FTS can't tokenize) without its raw cosine
+;; ever displacing a strong FTS hit — a doc keeps each lane's rank contribution and
+;; lanes only ever add. Weights/k are knobs (lever 2), kept as vars for tuning.
 
-(defn- vec-hits
-  "KNN node ids by cosine, or nil when embeddings are inert/unavailable."
+(def ^:dynamic *rrf-k*
+  "RRF damping: score contribution of a lane is w/(rrf-k + rank). Larger k flattens
+   the rank curve so deep hits still matter; smaller sharpens the top-rank edge so a
+   strong single-lane hit is not crowded out by mediocre multi-lane docs. Defaults
+   tuned (milestone #8) on the retrieval gold set against a live embedding endpoint;
+   they sit on a wide plateau (EN r@10 90% / PL 100%), not a knife-edge."
+  10)
+(def ^:dynamic *w-alias* "Exact-alias lane weight (dominates: an exact match is authoritative)." 3.0)
+(def ^:dynamic *w-title* "Title-scoped FTS lane weight (query terms in the node title)." 1.5)
+(def ^:dynamic *w-fts*   "Full-text (title+body) FTS bm25 lane weight." 1.0)
+(def ^:dynamic *w-vec*   "Vector KNN lane weight (cross-lingual recall expander)." 1.5)
+
+(defn- candidate-pool
+  "KNN pool / per-lane cap. Must exceed `limit` or the vector lane cannot lift
+   recall@limit; floored at 40 so small requests still get a deep cross-lingual pool."
+  [limit]
+  (max 40 (* 4 limit)))
+
+(defn- vec-lane
+  "Ordered KNN node ids (closest cosine first), or nil when embeddings are
+   inert/unavailable."
   [conn query limit]
   (when-let [[v] (try (embed/embed-batch [query]) (catch Exception _ nil))]
-    (->> (q conn "select node_id, distance from vec_nodes
+    (->> (q conn "select node_id from vec_nodes
                   where embedding match ? and k = ? order by distance"
             (embed/vec->literal v) limit)
-         (map (fn [r] [(:node_id r) (- 1.0 (/ (:distance r) 2.0))])))))
+         (mapv :node_id))))
+
+(defn- rrf
+  "Reciprocal Rank Fusion over lanes [{:w weight :ids [id ...best-first]}].
+   Returns {id fused-score}; an id absent from a lane contributes 0 there."
+  [lanes]
+  (reduce (fn [acc {:keys [w ids]}]
+            (reduce (fn [a [i id]]
+                      (update a id (fnil + 0.0) (/ (double w) (+ *rrf-k* (inc i)))))
+                    acc (map-indexed vector ids)))
+          {} lanes))
+
+(defn- node-meta
+  "Metadata {id {:title :type :status :snippet}} for `ids`. Reuses FTS rows (which
+   carry the snippet); fetches the rest — alias/vec-only ids — from `nodes`."
+  [conn ids fts-rows]
+  (let [from-fts (into {} (map (fn [r] [(:node_id r) (select-keys r [:title :type :status :snippet])]))
+                       fts-rows)
+        missing  (remove from-fts ids)]
+    (cond-> from-fts
+      (seq missing)
+      (into (map (fn [r] [(:id r) {:title (:title r) :type (:type r)
+                                   :status (:status r) :snippet nil}]))
+            (apply q conn (str "select id,title,type,status from nodes where id in ("
+                               (str/join "," (repeat (count missing) "?")) ")")
+                   missing)))))
 
 (defn search
   "Hybrid search. Returns ranked [{:id :title :type :status :snippet :score}].
-   Blend: exact alias (highest), FTS bm25, then vector if present."
+   Builds a candidate UNION across exact-alias, FTS bm25, and vector-KNN lanes,
+   then fuses with RRF. The vector lane is inert (and thus contributes nothing)
+   when no embeddings/endpoint are present (ADR-009)."
   ([query] (search query {}))
   ([query {:keys [limit] :or {limit 10}}]
    (with-db [conn]
-     (let [alias-ids (->> (q conn "select node_id from aliases where lower(alias)=lower(?)" query)
-                          (map :node_id) set)
-           fts (q conn "select f.node_id as node_id, n.title as title, n.type as type,
-                               n.status as status, bm25(nodes_fts) as rank,
-                               snippet(nodes_fts, 2, '[', ']', ' … ', 12) as snippet
-                        from nodes_fts f join nodes n on n.id = f.node_id
-                        where nodes_fts match ? order by rank limit ?"
-                  (fts-match query) (* 3 limit))
-           vmap (into {} (vec-hits conn query (* 3 limit)))
-           scored (map (fn [{:keys [node_id title type status rank snippet]}]
-                         {:id node_id :title title :type type :status status
-                          :snippet snippet
-                          :score (+ (- (or rank 0))                ; bm25: lower=better
-                                    (if (alias-ids node_id) 100.0 0.0)
-                                    (* 5.0 (get vmap node_id 0.0)))})
-                       fts)
-           ;; surface exact-alias nodes even if FTS missed them
-           extra (for [id (remove (set (map :id scored)) alias-ids)]
-                   (let [n (first (q conn "select id,title,type,status from nodes where id=?" id))]
-                     {:id (:id n) :title (:title n) :type (:type n) :status (:status n)
-                      :snippet nil :score 100.0}))]
-       (->> (concat scored extra) (sort-by :score >) (take limit) vec)))))
+     (let [pool      (candidate-pool limit)
+           alias-ids (->> (q conn "select node_id from aliases where lower(alias)=lower(?)" query)
+                          (mapv :node_id))
+           fts-rows  (q conn "select f.node_id as node_id, n.title as title, n.type as type,
+                                     n.status as status,
+                                     snippet(nodes_fts, 2, '[', ']', ' … ', 12) as snippet
+                              from nodes_fts f join nodes n on n.id = f.node_id
+                              where nodes_fts match ? order by bm25(nodes_fts) limit ?"
+                         (fts-match query) pool)
+           title-ids (when-let [m (title-match query)]
+                       (->> (q conn "select node_id from nodes_fts where nodes_fts match ?
+                                     order by bm25(nodes_fts) limit ?" m pool)
+                            (mapv :node_id)))
+           vec-ids   (vec-lane conn query pool)
+           fused     (rrf [{:w *w-alias* :ids alias-ids}
+                           {:w *w-title* :ids (or title-ids [])}
+                           {:w *w-fts*   :ids (mapv :node_id fts-rows)}
+                           {:w *w-vec*   :ids (or vec-ids [])}])
+           top-ids   (->> fused (sort-by (fn [[id s]] [(- s) id])) (take limit) (mapv key))
+           meta      (node-meta conn top-ids fts-rows)]
+       (mapv (fn [id]
+               (let [m (meta id)]
+                 {:id id :title (:title m) :type (:type m) :status (:status m)
+                  :snippet (:snippet m) :score (fused id)}))
+             top-ids)))))
 
 ;; --- node + graph ----------------------------------------------------------
 

@@ -43,6 +43,11 @@
   (binding [query/*db-path* db-path]
     (retrieval/scan!)))
 
+(defn- eval-gate [_]
+  (binding [query/*db-path* db-path]
+    (when-not (:pass (retrieval/gate!))
+      (System/exit 1))))
+
 (defn- index-rebuild [_]
   (binding [query/*db-path* db-path]
     (println "index:" (pr-str (schema/rebuild! db-path)))))
@@ -65,6 +70,7 @@
    "web-build"     web-build
    "eval-fidelity" eval-fidelity
    "eval-retrieval" eval-retrieval
+   "eval-gate"      eval-gate
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})
 
 (defn -main [& args]

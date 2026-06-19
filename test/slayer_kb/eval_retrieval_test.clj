@@ -42,3 +42,21 @@
     (is (= "miss" (:q (first misses))))
     (is (== 0.5 (:r1 (:en by-lang))) "en = {hit-first r1, miss} -> 1/2 at rank 1")
     (is (= 2 (:n (:pl by-lang))))))
+
+(defn- rep [mode r1 r5 r10 mrr en-r10 pl-r10]
+  {:mode mode
+   :overall {:n 10 :r1 r1 :r5 r5 :r10 r10 :mrr mrr}
+   :by-lang (sorted-map :en {:n 5 :r1 0.0 :r5 0.0 :r10 en-r10 :mrr 0.0}
+                        :pl {:n 5 :r1 0.0 :r5 0.0 :r10 pl-r10 :mrr 0.0})
+   :misses [] :rows []})
+
+(deftest gate-enforces-mode-floors
+  ;; measured milestone-#8 scorecard clears the hybrid floors
+  (is (:pass (ret/gate! (rep :hybrid 0.50 0.80 0.95 0.643 0.90 1.00))))
+  ;; a single PL query dropping below the hard 100% floor fails the gate
+  (is (not (:pass (ret/gate! (rep :hybrid 0.50 0.80 0.95 0.643 0.90 0.90))))
+      "PL r@10 non-regression is a hard floor")
+  ;; an EN recall collapse fails even with everything else healthy
+  (is (not (:pass (ret/gate! (rep :hybrid 0.50 0.80 0.95 0.643 0.50 1.00)))))
+  ;; inert vector lane is judged against the lower :fts floors
+  (is (:pass (ret/gate! (rep :fts 0.30 0.70 0.70 0.468 0.50 0.90)))))

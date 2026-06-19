@@ -32,6 +32,10 @@
   {:doc "Layer-4 retrieval scorecard: gold queries -> recall@k / MRR (hybrid needs SLAYER_EMBED_*)"
    :task (p/shell "clojure" "-M:run" "eval-retrieval")}
 
+  eval:gate
+  {:doc "Retrieval regression gate: scorecard vs committed mode-aware floors; exits non-zero on breach"
+   :task (p/shell "clojure" "-M:run" "eval-gate")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

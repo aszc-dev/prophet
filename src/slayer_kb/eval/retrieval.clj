@@ -94,3 +94,44 @@
   "Entry point: compute + print, return the data map."
   []
   (doto (report) print-report!))
+
+;; --- CI gate ---------------------------------------------------------------
+;;
+;; Committed regression floors, ratcheted to the milestone-#8 measured scorecard
+;; (overall r@10 95% / MRR 0.643 / EN r@10 90% / PL r@10 100% with a live embedding
+;; endpoint). Floors sit ~one query below the measured value to absorb corpus-growth
+;; noise WITHOUT masking a real regression; PL r@10 is held hard at 100% per the
+;; milestone's non-regression contract. The :fts floors apply when no endpoint is
+;; present (vector lane inert) so the gate is still meaningful in that environment.
+
+(def gates
+  {:hybrid {:r1 0.45 :r5 0.75 :r10 0.90 :mrr 0.60 :en-r10 0.80 :pl-r10 1.00}
+   :fts    {:r1 0.25 :r5 0.65 :r10 0.65 :mrr 0.43 :en-r10 0.45 :pl-r10 0.85}})
+
+(defn- gate-checks [rep]
+  (let [floor (gates (:mode rep))
+        o     (:overall rep)
+        en    (get-in rep [:by-lang :en :r10])
+        pl    (get-in rep [:by-lang :pl :r10])
+        vals  {:r1 (:r1 o) :r5 (:r5 o) :r10 (:r10 o) :mrr (:mrr o)
+               :en-r10 en :pl-r10 pl}]
+    (mapv (fn [[metric got]]
+            (let [need (floor metric)]
+              {:metric metric :got got :floor need :ok (>= got need)}))
+          vals)))
+
+(defn gate!
+  "Run the scorecard and assert it clears the committed floors for its mode. Prints
+   the report plus a PASS/FAIL line per metric and returns {:pass bool :checks ...}.
+   The CLI exits non-zero on failure so this can guard a commit / CI run."
+  ([] (gate! (report)))
+  ([rep]
+   (print-report! rep)
+   (let [checks (gate-checks rep)
+         pass   (every? :ok checks)]
+     (println (format "=== CI gate (%s floors) ===" (name (:mode rep))))
+     (doseq [{:keys [metric got floor ok]} checks]
+       (println (format "  [%s] %-7s %.3f  (floor %.3f)"
+                        (if ok "PASS" "FAIL") (name metric) (double got) (double floor))))
+     (println (if pass "GATE: PASS" "GATE: FAIL"))
+     {:pass pass :mode (:mode rep) :checks checks})))

@@ -51,3 +51,56 @@
           ;; rebuild is reproducible from files alone
           (is (= (:nodes r1) (:nodes (schema/rebuild! db)))))
         (finally (rm-rf dir) (.delete (io/file db)))))))
+
+;; --- RRF fusion (pure) -----------------------------------------------------
+
+(deftest rrf-fuses-by-rank-not-raw-score
+  (let [rrf #'query/rrf]
+    ;; a doc present in two lanes outranks a doc present in one, and a doc absent
+    ;; from a lane contributes nothing there (rank-based, scale-invariant).
+    (let [fused (rrf [{:w 1.0 :ids ["a" "b"]}
+                      {:w 1.0 :ids ["b" "c"]}])]
+      (is (> (fused "b") (fused "a")) "shared doc beats single-lane doc")
+      (is (> (fused "b") (fused "c")))
+      (is (= 3 (count fused)) "union spans all lanes")
+      (is (nil? (fused "z")) "doc in no lane is absent"))
+    ;; lane weight scales a lane's contribution; a higher-weighted single hit can
+    ;; outrank a lower-weighted one at the same rank.
+    (let [fused (rrf [{:w 3.0 :ids ["x"]} {:w 1.0 :ids ["y"]}])]
+      (is (> (fused "x") (fused "y"))))))
+
+;; --- candidate union + title lane (integration, inert vector lane) ---------
+
+(deftest search-unions-lanes-and-weights-title
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/kb-union-" (System/nanoTime))
+        db  (str dir ".db")]
+    (binding [store/*kb-root* dir
+              query/*db-path* db
+              embed/*disabled* true]
+      (try
+        ;; A's TITLE carries the distinctive term; B only mentions it in the body
+        ;; (repeatedly, so bm25 over all columns would favour B). The title lane
+        ;; must lift A above B.
+        (let [a (:node (store/upsert!
+                        {:type :dataset :title "Zeta Baseline Matrix" :status :current
+                         :aliases ["zeta-matrix"] :source_key "r:cards/a.md"
+                         :provenance [{:source :git :ref "git:r@s:cards/a.md"}]
+                         :observations [{:date "" :ref "git:r@s:cards/a.md"
+                                         :text "an evaluation grid"}]}))
+              b (:node (store/upsert!
+                        {:type :page :title "General Notes" :status :current
+                         :source_key "r:pages/b.md"
+                         :provenance [{:source :git :ref "git:r@s:pages/b.md"}]
+                         :observations [{:date "" :ref "git:r@s:pages/b.md"
+                                         :text "zeta zeta zeta matrix matrix matrix"}]}))]
+          (schema/rebuild! db)
+          ;; title-token query: A (term in title) outranks B (term only in body)
+          (let [res (query/search "Zeta Matrix")
+                ids (mapv :id res)]
+            (is (contains? (set ids) (:id a)))
+            (is (contains? (set ids) (:id b)) "union still includes the body-only match")
+            (is (< (.indexOf ids (:id a)) (.indexOf ids (:id b)))
+                "title lane ranks the title match above the body-only match"))
+          ;; exact alias still surfaces and leads
+          (is (= (:id a) (:id (first (query/search "zeta-matrix"))))))
+        (finally (rm-rf dir) (.delete (io/file db)))))))

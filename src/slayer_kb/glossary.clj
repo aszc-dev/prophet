@@ -73,15 +73,34 @@
 ;; --- jargon detection ------------------------------------------------------
 
 (def ^:private camel-re   #"[\p{L}\p{N}]*\p{Ll}\p{Lu}[\p{L}\p{N}]*")  ; EntiGraph, DoRA, LLMzSzŁ
-(def ^:private acronym-re #"\p{Lu}{3,}")                              ; KLEJ, RLVR, ORPO, MCQ
+;; A standalone all-caps acronym in prose (KLEJ, ORPO, MCQ). The boundaries reject
+;; the dominant noise source: fragments of UPPER_SNAKE_CASE code constants and the
+;; pipe-tagged morpheme role labels that `flatten-body` folds in from code/data
+;; dumps — `ROOT_ALLOMORPH` -> ROOT, `em|INST_SG` -> INST, `GEN_DEFAULT` -> GEN.
+;; Left: not after a letter/digit/`_`/`|`. Right: not before a lowercase (CamelCase
+;; head -> camel lane), digit (truncated `GSM8K` -> GSM), `_`, or `|`.
+(def ^:private acronym-re #"(?<![\p{L}\p{N}_|])\p{Lu}{3,}(?![\p{Ll}\p{N}_|])")
 (def ^:private hyphen-re  #"\p{Ll}{2,}(?:-\p{Ll}{2,})+")              ; held-out, reading-comprehension
 
+(defn- strip-code
+  "Blank out inline code spans before jargon harvesting so code identifiers
+   (`GEN_MODEL`, `DATASET_MANIFEST.md`) never seed concepts. Backtick spans only —
+   fenced code is already flattened into prose upstream, where the acronym
+   boundaries above keep its SNAKE_CASE / pipe-tag tokens out."
+  [text]
+  (str/replace (or text "") #"`[^`]*`" " "))
+
 (def ^:private stop-acronyms
-  "Common all-caps words (English / Polish function & heading words) that the
-   acronym lane would otherwise mint as bogus concepts. Folded forms."
+  "Common all-caps words the acronym lane would otherwise mint as bogus concepts:
+   English/Polish function & heading words, plus the prose-emphasis and enum/split
+   labels (HIGH/MID/LOW quality tiers, TRAIN/TEST splits, shouted Polish words) that
+   survive the structural boundaries because they appear in real prose, not code.
+   Folded (diacritic-stripped, lower-cased) forms."
   #{"and" "not" "only" "all" "for" "the" "nie" "tak" "first" "pass" "data" "json"
     "clean" "contaminated" "czysto" "generatywna" "license" "lineage" "faza" "core"
-    "note" "proxy" "done" "todo" "yes" "raw" "via" "non" "tylko" "oraz" "lub"})
+    "note" "proxy" "done" "todo" "yes" "raw" "via" "non" "tylko" "oraz" "lub"
+    "also" "dropped" "high" "mid" "low" "train" "test" "readme"
+    "naszym" "otwarty" "prywatny" "prywatnym" "wiedzy"})
 
 (defn- surfaces-by-lane
   "{:camel #{..} :acronym #{..} :hyphen #{..}} jargon tokens in `text` (>= min-len).
@@ -115,7 +134,7 @@
                   (-> voc
                       (update-in [(fold surface) :surfaces surface] (fnil inc 0))
                       (assoc-in  [(fold surface) flag] true)))
-           lane (surfaces-by-lane (scan-text node))]
+           lane (surfaces-by-lane (strip-code (scan-text node)))]
        (as-> voc v
          (reduce #(add %1 (str %2) :tag?) v
                  (filter #(>= (count (str %)) min-len) (:tags node)))
@@ -192,15 +211,38 @@
        :state       nil
        :observations []})))
 
+(defn- prune-concepts!
+  "Remove derived concept nodes whose `source_key` is no longer a candidate. A
+   concept is a pure projection of the store (no own observations); when a sourcing
+   heuristic tightens, the orphans it minted must not linger. Provenance-or-nothing
+   in reverse: a concept with a grounded `:definition` is knowledge, so it is
+   archived (`status :archived`), never deleted (invariant #3); a definition-less
+   concept is a derivation artifact and is removed. Returns {:pruned n :archived n}."
+  [cand-keys]
+  (let [keep? (set cand-keys)]
+    (reduce
+     (fn [acc {:keys [file node]}]
+       (if (and (= "concept" (name (:type node)))
+                (not (keep? (:source_key node))))
+         (if (seq (str (:definition node)))
+           (do (store/upsert! (assoc node :status :archived))
+               (update acc :archived (fnil inc 0)))
+           (do (.delete file)
+               (update acc :pruned (fnil inc 0))))
+         acc))
+     {:pruned 0 :archived 0} (store/all-notes))))
+
 (defn build!
-  "Derive glossary concept nodes from the current note store. Append-only via
-   upsert!; re-running is a verified no-op. Returns a write tally."
+  "Derive glossary concept nodes from the current note store. Candidates are
+   upserted (append-only; re-running is a verified no-op), then orphaned concepts
+   from earlier, looser heuristics are pruned. Returns a write tally."
   []
   (let [nodes (mapv :node (store/all-notes))
         cands (candidates nodes)
-        res   (map store/upsert! cands)]
-    (reduce (fn [acc {:keys [status]}] (update acc status (fnil inc 0)))
-            {:candidates (count cands)} res)))
+        res   (map store/upsert! cands)
+        tally (reduce (fn [acc {:keys [status]}] (update acc status (fnil inc 0)))
+                      {:candidates (count cands)} (doall res))]
+    (merge tally (prune-concepts! (map :source_key cands)))))
 
 ;; --- optional grounded definitions (LLM gap-fill, ADR-005) -----------------
 

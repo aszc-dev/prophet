@@ -64,6 +64,54 @@
     (is (contains? (set (get-in c [:links :defined-by])) "01C")
         "entity whose title/alias is the term now grounds the tag-concept")))
 
+;; --- jargon noise filter (acronym lane) ------------------------------------
+
+(deftest acronym-lane-rejects-code-and-snake-fragments
+  ;; the dominant noise source: `flatten-body` folds code/data dumps into prose, so
+  ;; the acronym lane harvested fragments of UPPER_SNAKE constants and pipe-tagged
+  ;; morpheme labels. Boundaries + code-span stripping must drop those while real
+  ;; standalone prose acronyms still become concepts.
+  (let [a {:id "01A" :type :source :title "Morph report"
+           :provenance [{:source :git :ref "git:r@s:morph.md"}]
+           :observations [{:ref "git:r@s:morph.md#x"
+                           :text (str "gold: ps|ROOT_ALLOMORPH em|INST_SG ; env "
+                                      "GEN_DEFAULT; `DATASET_MANIFEST.md`. Bench: MMLU, KLEJ.")}]}
+        b {:id "01B" :type :source :title "Plan"
+           :provenance [{:source :git :ref "git:r@s:plan.md"}]
+           :observations [{:ref "git:r@s:plan.md#y"
+                           :text "Ewaluacja na MMLU i KLEJ; pred psem|ROOT m|INST."}]}
+        titles (set (map :title (glossary/candidates [a b])))]
+    (is (contains? titles "MMLU") "standalone prose acronym kept")
+    (is (contains? titles "KLEJ") "standalone prose acronym kept")
+    (doseq [noise ["ROOT" "ALLOMORPH" "INST" "DATASET" "DEFAULT" "MANIFEST"]]
+      (is (not (contains? titles noise))
+          (str noise " is a code/snake fragment, not a concept")))))
+
+;; --- prune orphaned concepts -----------------------------------------------
+
+(deftest build-prunes-orphaned-concepts
+  ;; a concept minted by an earlier, looser heuristic (no longer a candidate) is a
+  ;; derivation artifact and must be removed on rebuild; definition-less only.
+  (with-temp-kb
+    (fn []
+      (let [ds {:type :dataset :title "Egzaminy CKE" :status :current :source_key "r:ds#a"
+                :tags ["cke"] :aliases ["cke"] :provenance [{:source :git :ref "git:r@s:a#cke"}]
+                :state "CKE to komisja egzaminacyjna." :observations []}
+            bn {:type :benchmark :title "Bench CKE" :status :current :source_key "r:bn#b"
+                :tags ["cke"] :provenance [{:source :git :ref "git:r@s:b#cke"}] :observations []}]
+        (store/upsert! ds)
+        (store/upsert! bn)
+        (store/upsert! {:type :concept :title "ROOT" :status :draft :source_key "glossary:term:root"
+                        :moc ["glosariusz"] :tags [] :aliases ["ROOT"] :visibility :public
+                        :provenance [{:source :git :ref "git:r@s:a#cke"}]
+                        :links {:mentions ["x"]} :observations []})
+        (let [tally  (glossary/build!)
+              titles (->> (store/all-notes) (map :node)
+                          (filter #(= "concept" (name (:type %)))) (map :title) set)]
+          (is (pos? (:pruned tally)) "orphan concept pruned")
+          (is (not (contains? titles "ROOT")) "orphan gone from store")
+          (is (contains? titles "CKE") "live candidate kept"))))))
+
 ;; --- grounding passages (Part C) -------------------------------------------
 
 (deftest defining-node-grounds-unconditionally

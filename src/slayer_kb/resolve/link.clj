@@ -26,12 +26,15 @@
 
 (defn- assign-ids
   "Give every node a stable id: reuse the existing node's id for a matching
-   source_key, else mint a fresh ULID."
+   source_key, else derive one deterministically from the source_key so a
+   regenerated store reproduces it (invariant #5); random ULID only when a node
+   has no source_key."
   [nodes existing]
   (let [by-key (into {} (map (juxt :source_key :id) existing))]
     (mapv (fn [n]
             (assoc n :id (or (:id n)
                              (get by-key (:source_key n))
+                             (some-> (:source_key n) util/stable-ulid)
                              (util/ulid))))
           nodes)))
 

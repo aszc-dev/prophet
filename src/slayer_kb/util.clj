@@ -40,6 +40,18 @@
          rand-part (encode-base32 rand-bits 16)]
      (str time-part rand-part))))
 
+(defn stable-ulid
+  "Deterministic ULID-shaped id derived from a stable natural key (source_key).
+   Same key -> same id forever, so regenerating the store reproduces every id
+   (invariant #5). 128 bits of sha256(key) encoded as 26 Crockford base32 chars.
+   Unlike `ulid` it carries no timestamp; ids are opaque join keys and recency is
+   tracked by the `updated` field (whats_new), never by id order."
+  [k]
+  (let [md (MessageDigest/getInstance "SHA-256")
+        bs (.digest md (.getBytes (str k) "UTF-8"))
+        n  (java.math.BigInteger. 1 (java.util.Arrays/copyOf bs 16))]
+    (encode-base32 n 26)))
+
 ;; --- slug ------------------------------------------------------------------
 
 (defn slug

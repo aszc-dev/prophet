@@ -81,11 +81,16 @@
 ;; --- writing ---------------------------------------------------------------
 
 (defn- ensure-id
-  "Reuse the existing node's ULID for this source key, else mint a fresh one."
+  "Give the node a stable id: reuse the existing node's id for this source key,
+   else derive one deterministically from the source key (so a regenerated store
+   reproduces it — invariant #5), falling back to a random ULID only when there is
+   no source key."
   [node]
   (if-let [existing (and (:source_key node) (by-source-key (:source_key node)))]
     (assoc node :id (:id existing))
-    (assoc node :id (or (:id node) (util/ulid)))))
+    (assoc node :id (or (:id node)
+                        (some-> (:source_key node) util/stable-ulid)
+                        (util/ulid)))))
 
 (defn- canonical
   "Representation-independent form for hashing. Collapses the two shapes a node can

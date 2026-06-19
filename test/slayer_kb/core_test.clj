@@ -9,6 +9,8 @@
             [slayer-kb.extract.json :as ejson]
             [slayer-kb.resolve.link :as resolve]
             [slayer-kb.glossary :as glossary]
+            [slayer-kb.extract.common :as common]
+            [slayer-kb.util :as util]
             [slayer-kb.store.node :as store]))
 
 (deftest glob-classification
@@ -175,6 +177,32 @@
         (is (= :updated (:status r)))
         (is (= #{"license: MIT" "Q9: 58.2"} (set (map :text (:observations n))))
             "card observation preserved, leaderboard observation appended")))))
+
+(deftest flatten-body-captures-blocks
+  (testing "table -> cells, no leading pipe (was :stub-table)"
+    (let [t (common/flatten-body "| pole | znaczenie |\n|---|---|\n| id | klucz |")]
+      (is (not (clojure.string/starts-with? t "|")) "no leading pipe")
+      (is (re-find #"pole \| znaczenie" t))
+      (is (re-find #"id \| klucz" t) "data rows kept")
+      (is (not (re-find #"---" t)) "separator row dropped")))
+  (testing "fenced code -> inner lines, no bare fence (was :stub-fence)"
+    (let [t (common/flatten-body "```bash\npip install -e .\n```")]
+      (is (= "pip install -e ." t))))
+  (testing "colon-introduced block -> body no longer ends in ':' (was :dangling)"
+    (let [t (common/flatten-body "Required fields:\n- id\n- surface")]
+      (is (not (clojure.string/ends-with? t ":")))
+      (is (re-find #"id" t))))
+  (testing "empty in -> empty out"
+    (is (= "" (common/flatten-body "")))
+    (is (= "" (common/flatten-body nil)))))
+
+(deftest stable-ulid-deterministic
+  (let [k "slayer:DATASET_MANIFEST.md#schema"
+        a (util/stable-ulid k)]
+    (is (= a (util/stable-ulid k)) "same source_key -> same id")
+    (is (= 26 (count a)) "ULID-shaped: 26 chars")
+    (is (re-matches #"[0-9A-HJKMNP-TV-Z]{26}" a) "Crockford base32")
+    (is (not= a (util/stable-ulid (str k "x"))) "different key -> different id")))
 
 (deftest deterministic-id-reuse
   (let [tmp (str (System/getProperty "java.io.tmpdir") "/kb-test-" (System/nanoTime))]

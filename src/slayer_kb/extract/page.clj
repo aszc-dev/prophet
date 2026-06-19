@@ -32,7 +32,7 @@
                        (map (fn [{:keys [heading text]}]
                               {:date (or (:date front) "")
                                :ref  (str ref "#" (c/anchor heading))
-                               :text (str heading " — " (first (str/split-lines text)))})))]
+                               :text (str heading " — " (c/flatten-body text))})))]
      [{:type        type
        :title       (or (:title front) (str/replace (or (last (str/split (str path) #"/")) "") #"\.md$" ""))
        :status      (keyword (or (:status front) "current"))

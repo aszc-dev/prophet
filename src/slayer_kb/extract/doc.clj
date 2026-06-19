@@ -22,7 +22,7 @@
                    (filter :heading)
                    (map (fn [{:keys [heading text]}]
                           {:date "" :ref (str ref "#" (c/anchor heading))
-                           :text (str heading " — " (first (str/split-lines text)))})))]
+                           :text (str heading " — " (c/flatten-body text))})))]
     [{:type        :source
       :title       (or (:title front) (h1 body*) fname)
       :status      :current

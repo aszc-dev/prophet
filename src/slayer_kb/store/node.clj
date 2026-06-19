@@ -98,12 +98,15 @@
    clj-yaml parse output (LazySeq, OrderedMap, string values like \"git\") — to one
    canonical shape, so the content-hash does not flip between ingest passes.
    Keywords (keys and values) become their name; seqs become vectors; maps become
-   key-sorted."
+   key-sorted; an empty string collapses to nil, so a value absent on disk (parsed
+   back as nil — e.g. an observation with no date) hashes the same as a fresh
+   extraction's \"\" and re-ingest converges in one pass."
   [x]
   (walk/postwalk
    (fn [n]
      (cond
        (keyword? n)                             (name n)
+       (= "" n)                                 nil
        (and (sequential? n) (not (vector? n)))  (vec n)
        (map? n)                                 (into (sorted-map) n)
        :else n))

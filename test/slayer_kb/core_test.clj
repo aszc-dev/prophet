@@ -162,6 +162,22 @@
         (is (= :unchanged (:status (store/upsert! back)))
             "re-upsert of the reparsed node must not churn")))))
 
+(deftest upsert-converges-in-one-pass-without-date
+  ;; regression (the two-pass wart): fresh extraction emits :date "" while a disk
+  ;; round-trip parses an absent date back as nil. canonical collapses "" -> nil so
+  ;; the very first re-upsert is already a no-op (was: churned once before settling).
+  (with-temp-kb
+    (fn []
+      (let [node {:type :source :title "Doc" :status :current :source_key "r:d#x"
+                  :provenance [{:source :git :ref "git:r@s:d"}]
+                  :observations [{:date "" :ref "git:r@s:d#s" :text "section body"}]}
+            r1   (store/upsert! node)
+            back (store/md->node (slurp (:file r1)))]
+        (is (= :created (:status r1)))
+        (is (nil? (:date (first (:observations back)))) "absent date parses back as nil")
+        (is (= :unchanged (:status (store/upsert! back)))
+            "no-date node converges in ONE re-upsert, no \"\"/nil hash flip")))))
+
 (deftest upsert-merges-observations-append-only
   ;; invariant #3: a re-extract from one source must not drop observations another
   ;; source appended to the same node.

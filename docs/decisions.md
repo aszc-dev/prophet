@@ -184,9 +184,12 @@ schema: request `dimensions: 1024` (or truncate client-side) for a minimal quali
 drop and no migration. Stub vs real embeddings is therefore a **data** decision,
 never a schema one.
 
-**Serving (operational).** The endpoint is **omlx** (`omlx serve`, model symlinked
-under `~/.omlx/models/<org>/<name>/`), **not** `mlx_lm.server` — the latter exposes
-only completions, not `/v1/embeddings`. Two gotchas, both load-bearing:
+**Serving (operational) — SUPERSEDED by ADR-010.** The original serving guidance
+(omlx for dev) is kept here as history; the production embedding runtime is now
+**TEI** (ADR-010). The dimension-pin decision above still stands. The endpoint was
+**omlx** (`omlx serve`, model symlinked under `~/.omlx/models/<org>/<name>/`),
+**not** `mlx_lm.server` — the latter exposes only completions, not
+`/v1/embeddings`. Two gotchas, both load-bearing:
 
 - `SLAYER_EMBED_URL` must use **`127.0.0.1`**, never `localhost`. The JVM
   HttpClient resolves `localhost` to IPv6 `::1`, but the MLX servers bind IPv4 only
@@ -212,3 +215,35 @@ by default and 400s on a `dimensions` request unless launched with
 `--hf-overrides '{"is_matryoshka": true, ...}'`. Verify the chosen MLX server
 honors `dimensions: 1024` before pinning a larger model; until then keep 0.6B,
 whose native width already is 1024.
+
+## ADR-010 — TEI is the embedding runtime (supersedes ADR-009's serving section)
+
+**Context.** Qwen3-Embedding vectors are **not interchangeable across runtimes**:
+the same text embedded by different runtimes (omlx/MLX vs TEI vs vLLM) can land at
+cosine < 0.2. Document vectors and query vectors must come from one runtime + one
+model revision, or retrieval silently breaks. ADR-009 picked omlx for local dev;
+that does not generalize to CI and the deploy host.
+
+**Decision.** **HuggingFace Text Embeddings Inference (TEI)** is the one embedding
+runtime everywhere — dev, CI, and prod. Pin the image
+(`ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`) and the model
+(`Qwen/Qwen3-Embedding-0.6B`); these pins are the dev=CI=prod contract. The
+dimension stays 1024 (ADR-009). A developer may use any endpoint locally, but
+vectors that enter `kb.db` must come from the pinned TEI.
+
+**Operational.**
+- TEI exposes the OpenAI-compatible `/v1/embeddings`; the client posts there
+  (`SLAYER_EMBED_URL` + `SLAYER_EMBED_MODEL`).
+- **Do not send `:dimensions` at native width** — TEI (and vLLM) 400 on it. The
+  client omits the param at 1024 and sends it only for genuine MRL truncation
+  (`embed/request-body`).
+- TEI L2-normalizes server-side; `vec_nodes` uses sqlite-vec's default L2 metric,
+  so L2-rank == cosine-rank on unit vectors. No client-side normalization.
+- The `127.0.0.1`-not-`localhost` IPv6 gotcha (ADR-009) applies to host-local
+  endpoints; across the compose network the service name resolves to IPv4.
+
+**Validation (Gate B).** The omlx baseline does not carry over by assumption.
+Before ratcheting `eval:gate`, re-run `eval/retrieval-gold.edn` with TEI producing
+**both** document and query vectors on the host and confirm the numbers reproduce
+(target r@10 ≈ 95%, EN r@10 ≈ 90%, PL 100%). Commit the TEI scorecard as the new
+floor only after it passes.

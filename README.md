@@ -28,7 +28,10 @@ node and claim carries an exact provenance ref.
   regenerable, never transcribed.)
 
 The live MCP surface is exactly five **read** tools — `search`, `get_node`,
-`traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008).
+`traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008). The HTTP
+transport is request/response JSON-RPC over `POST /mcp` (plus `GET /health`); it
+does not yet implement Streamable-HTTP SSE or session ids, so clients that require
+an SSE channel are unsupported for now — stdio works for all clients.
 
 ## Architecture at a glance
 

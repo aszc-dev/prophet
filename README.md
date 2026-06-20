@@ -29,9 +29,11 @@ node and claim carries an exact provenance ref.
 
 The live MCP surface is exactly five **read** tools — `search`, `get_node`,
 `traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008). The HTTP
-transport is request/response JSON-RPC over `POST /mcp` (plus `GET /health`); it
-does not yet implement Streamable-HTTP SSE or session ids, so clients that require
-an SSE channel are unsupported for now — stdio works for all clients.
+transport is **stateless Streamable HTTP**: JSON-RPC over `POST /mcp`, `GET /mcp`
+→ 405 (no server-initiated stream), `GET /health` for liveness. It negotiates the
+client's `MCP-Protocol-Version` and supports optional `Origin` allowlisting
+(`MCP_ALLOWED_ORIGINS`) and static Bearer auth (`MCP_AUTH_TOKEN`). The stdio
+transport also works for all clients.
 
 ## Architecture at a glance
 
@@ -58,6 +60,36 @@ bb ingest:repo examples/sample-source   # build kb/ from a tiny demo source
 bb index:rebuild                         # derive kb.db from kb/
 bb search "DemoEval"                     # ranked nodes, each with a provenance ref
 ```
+
+## Connect
+
+Point any MCP client at the deployment's `https://<DOMAIN>/mcp`. Per-client,
+copy-paste configs (Claude Code, Claude Desktop, Codex, Cursor, the API connector)
+are in [`CONNECT.md`](CONNECT.md). The public preview is open (no token); reads
+only, provenance-pinned, cross-lingual.
+
+## Self-host
+
+Run the whole stack (prophet + the pinned TEI embedder) with Docker Compose:
+
+```sh
+docker compose up            # builds the corpus from the bundled fixture
+# MCP at  http://localhost:8765/mcp   (web at http://localhost:8765)
+claude mcp add --transport http prophet http://localhost:8765/mcp
+```
+
+That default needs zero credentials and serves a 3-node demo corpus in `:mode
+:hybrid` (TEI embeds the fixture). To serve the real public corpus, set:
+
+```sh
+PROPHET_SOURCE_REPO=https://github.com/slayerlabs/slayer
+PROPHET_SOURCE_CONFIG=slayer
+```
+
+The bundled `tei` service provides hybrid retrieval out of the box
+(`SLAYER_EMBED_URL=http://tei:80`). TEI CPU images are amd64-only; on an arm64 dev
+machine the image runs under emulation and TEI inference is unreliable — hybrid is
+verified on native amd64 (CI + the deploy host).
 
 ## Repo map
 

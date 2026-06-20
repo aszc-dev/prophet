@@ -1,5 +1,6 @@
 (ns prophet.web-test
   (:require [clojure.test :refer [deftest is]]
+            [prophet.provenance :as prov]
             [prophet.web.build :as web]))
 
 (deftest provenance-to-url
@@ -12,6 +13,15 @@
   (is (= "https://slayer.fabryka.ai/x" (web/prov->url "https://slayer.fabryka.ai/x"))
       "http ref passes through")
   (is (nil? (web/prov->url "discord:slayer/trening/123")) "no public url for discord"))
+
+(deftest web-and-provenance-url-parity
+  ;; parityrepo is configured ONLY via test/sources/parityrepo.edn (:github
+  ;; someorg/somerepo) — never in code. web and provenance must agree, and the org
+  ;; must come from that config. RED if web reintroduces a hardcoded org map.
+  (let [ref "git:parityrepo@deadbeef:public/data/x.json"]
+    (is (= (prov/ref->url ref) (web/prov->url ref)))
+    (is (= "https://github.com/someorg/somerepo/blob/deadbeef/public/data/x.json"
+           (web/prov->url ref)))))
 
 (deftest permalink-is-id-based
   (is (= "/node/01ABC/" (web/permalink "01ABC"))))

@@ -24,16 +24,20 @@
 (defn- git-url [ref]
   (when-let [[_ repo sha path anchor] (re-matches git-re ref)]
     (when-let [gh (github-repo repo)]
-      (str "https://github.com/" gh "/blob/" sha "/" path
-           (when (and anchor (str/ends-with? path ".md")) (str "#" anchor))))))
+      ;; keep heading anchors for markdown (GitHub renders those) and line anchors
+      ;; (Lnn) for any file; drop record/section anchors that wouldn't resolve.
+      (let [keep? (and anchor (or (str/ends-with? path ".md") (re-matches #"L\d+" anchor)))]
+        (str "https://github.com/" gh "/blob/" sha "/" path
+             (when keep? (str "#" anchor)))))))
 
 (defn ref->url
-  "URL for a provenance ref, or nil for an unknown/unmappable scheme.
-   git -> GitHub blob at the pinned sha; web -> the url itself; discord -> nil
-   (no stable URL scheme yet)."
+  "URL for a provenance ref, or nil for an unknown/unmappable scheme. The single
+   source of truth for ref->URL (the web renderer delegates here). git -> GitHub
+   blob at the pinned sha; web:/http(s) -> the url itself; discord/unknown -> nil."
   [ref]
   (let [ref (str ref)]
     (cond
-      (str/starts-with? ref "git:") (git-url ref)
-      (str/starts-with? ref "web:") (subs ref 4)
+      (str/starts-with? ref "git:")  (git-url ref)
+      (str/starts-with? ref "web:")  (subs ref 4)
+      (str/starts-with? ref "http")  ref
       :else nil)))

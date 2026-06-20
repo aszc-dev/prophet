@@ -1,0 +1,4 @@
+;; Test-only source config (classpath: test/). Exists to prove web + provenance
+;; both resolve org/repo from resources/sources/<name>.edn, not a hardcoded map —
+;; this repo is configured ONLY here, never in code.
+{:github "someorg/somerepo"}

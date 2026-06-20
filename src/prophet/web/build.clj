@@ -9,32 +9,20 @@
             [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clj-yaml.core :as yaml]
+            [prophet.provenance :as prov]
             [prophet.store.node :as store]))
 
 (def web-root "web")
-
-;; repo -> GitHub org, for turning a pinned git ref into a blob URL.
-(def ^:private repo-org {"slayer" "slayerlabs" "recipes" "slayerlabs"})
-(def ^:private default-org "slayerlabs")
 
 (defn permalink [id] (str "/node/" id "/"))
 
 ;; --- provenance ref -> clickable source URL -------------------------------
 
 (defn prov->url
-  "git:repo@sha:path#anchor -> GitHub blob URL at the pinned sha (line anchors
-   kept; section/record anchors dropped — the file still opens). http(s) refs pass
-   through. discord/unknown -> nil (no public URL in v0.5)."
+  "Provenance ref -> clickable source URL. Delegates to prophet.provenance/ref->url
+   (the single source of truth; org mapping lives in resources/sources/<repo>.edn)."
   [ref]
-  (cond
-    (str/starts-with? ref "http") ref
-    (str/starts-with? ref "git:")
-    (when-let [[_ repo sha rest] (re-matches #"git:([^@]+)@([^:]+):(.+)" ref)]
-      (let [[path anchor] (str/split rest #"#" 2)
-            org  (get repo-org repo default-org)
-            frag (when (and anchor (re-matches #"L\d+" anchor)) (str "#" anchor))]
-        (str "https://github.com/" org "/" repo "/blob/" sha "/" path frag)))
-    :else nil))
+  (prov/ref->url ref))
 
 (defn- ref-label
   "Compact display label for a provenance ref: drop the scheme and shorten a git

@@ -2,9 +2,13 @@
 # on the deploy host from its source repo (slayerlabs/slayer), never committed here.
 kb/
 
-# derived index — rebuildable from kb/ (invariant #1), never source of truth
+# derived index — rebuildable from kb/ (invariant #1), never source of truth.
+# *.db also covers the derived telemetry.db mirror (ADR-011).
 kb.db
 *.db
+
+# telemetry capture (append-only JSONL; path is operator-chosen via env)
+telemetry*.jsonl
 
 # clojure / tooling
 .cpcache/

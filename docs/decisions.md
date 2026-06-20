@@ -226,7 +226,7 @@ that does not generalize to CI and the deploy host.
 
 **Decision.** **HuggingFace Text Embeddings Inference (TEI)** is the one embedding
 runtime everywhere — dev, CI, and prod. Pin the image
-(`ghcr.io/huggingface/text-embeddings-inference:cpu-1.7`) and the model
+(`ghcr.io/huggingface/text-embeddings-inference:cpu-1.8`) and the model
 (`Qwen/Qwen3-Embedding-0.6B`); these pins are the dev=CI=prod contract. The
 dimension stays 1024 (ADR-009). A developer may use any endpoint locally, but
 vectors that enter `kb.db` must come from the pinned TEI.
@@ -241,9 +241,52 @@ vectors that enter `kb.db` must come from the pinned TEI.
   so L2-rank == cosine-rank on unit vectors. No client-side normalization.
 - The `127.0.0.1`-not-`localhost` IPv6 gotcha (ADR-009) applies to host-local
   endpoints; across the compose network the service name resolves to IPv4.
+- This model has no ONNX export, so TEI uses its Candle CPU backend. cpu-1.7's
+  Candle backend aborts at warmup on some CPUs ("Intel MKL ERROR: Parameter N …
+  GEMM"); cpu-1.8 fixes it. Pass `--auto-truncate` (required when
+  `--max-batch-tokens` is below the model's max input length).
 
 **Validation (Gate B).** The omlx baseline does not carry over by assumption.
 Before ratcheting `eval:gate`, re-run `eval/retrieval-gold.edn` with TEI producing
 **both** document and query vectors on the host and confirm the numbers reproduce
 (target r@10 ≈ 95%, EN r@10 ≈ 90%, PL 100%). Commit the TEI scorecard as the new
 floor only after it passes.
+
+## ADR-011 — MCP telemetry: append-only tool-call log feeding the gold-set eval
+
+**Context.** We want to know which real queries retrieval serves well or poorly,
+to grow `eval/retrieval-gold.edn` from real traffic instead of hand-authoring. The
+server makes no LLM calls — this is retrieval/tool-span capture, not LLM
+observability. At current scale a platform/collector (Langfuse, Phoenix, OTLP) is
+unjustified overhead.
+
+**Decision.** Capture every tool call at the single shared chokepoint
+(`server/handle`, `tools/call`) as one append-only JSONL record. The JSONL is the
+primary record (captured events — not regenerable from `kb/`); `telemetry.db` is a
+**derived** mirror of it (rebuilt by `bb telemetry:gaps`, reusing the `index.*`
+SQLite layer). Neither is `kb.db`, and `bb index:rebuild` never touches them.
+
+**Properties.**
+- **Inert by default.** No sink unless `PROPHET_TELEMETRY_PATH` is set; `emit!` is
+  then a no-op (mirrors the embed-disabled pattern, ADR-009) and never throws.
+  Writes are serialized for the multi-threaded HTTP transport.
+- **`handle` stays pure-ish.** Signature unchanged; `session_id`/`transport` flow
+  via dynamic vars bound per transport (stdio = one session; http = the W3C
+  `traceparent` trace-id when present, else a fresh uuid).
+- **OTel-mappable, not OTel-literal.** Records use SQL-friendly keys; the shape is
+  a lossless superset of the OTel tool-span + retrieval-span attributes
+  (`tool`→`gen_ai.tool.name`, `args`→`gen_ai.tool.call.arguments`,
+  `result_ids`/`result_count`→retrieval-span document ids/count,
+  `latency_ms`→span duration, `is_error`/`error_msg`→span status,
+  `session_id`→trace correlation). An OTLP exporter is a pure rename, deferred.
+
+**Gap distillation.** `bb telemetry:gaps` mirrors the JSONL into `telemetry.db` and
+emits EDN candidate gold-set queries: searches that returned nothing, scored below a
+floor (`PROPHET_TELEMETRY_SCORE_FLOOR`), or had no follow-up `get_node` on any
+returned id within the same session — shaped for hand-labelling into the gold set.
+
+**Open question (future work).** A successful retrieval and a poor one both return
+HTTP 200, so the query log alone cannot judge retrieval quality. The implicit
+follow-up `get_node` signal is a weak proxy; an explicit `feedback` tool would be
+stronger but breaks the v0 read-only contract (ADR-008). Revisit with the v1.5
+write/synth tools (which will make real LLM calls and justify a fuller exporter).

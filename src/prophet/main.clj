@@ -12,6 +12,8 @@
             [prophet.web.build :as web]
             [prophet.eval.fidelity :as fidelity]
             [prophet.eval.retrieval :as retrieval]
+            [prophet.mcp.telemetry :as tel]
+            [prophet.mcp.telemetry.store :as tel-store]
             [prophet.store.node :as store]
             [prophet.ingest :as ingest]))
 
@@ -59,6 +61,15 @@
     (pp/print-table (map #(select-keys % [:score :type :title :snippet])
                          (query/search (str/join " " args))))))
 
+(defn- telemetry-gaps [_]
+  (if-let [sink (tel/sink-path)]
+    (let [{:keys [rows]} (tel-store/rebuild! sink)]
+      (binding [*out* *err*] (println "telemetry: mirrored" rows "rows from" sink))
+      (pp/pprint (vec (tel-store/gaps))))
+    (binding [*out* *err*]
+      (println "telemetry disabled (set PROPHET_TELEMETRY_PATH)")
+      (System/exit 2))))
+
 (defn- stats [_]
   (let [nodes (map :node (store/all-notes))]
     (prn {:nodes (count nodes)
@@ -76,6 +87,7 @@
    "eval-fidelity" eval-fidelity
    "eval-retrieval" eval-retrieval
    "eval-gate"      eval-gate
+   "telemetry-gaps" telemetry-gaps
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))
    "serve-mcp-http" (fn [_] (binding [query/*db-path* db-path] (mcp-http/serve)))})
 

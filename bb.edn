@@ -36,6 +36,10 @@
   {:doc "Retrieval regression gate: scorecard vs committed mode-aware floors; exits non-zero on breach"
    :task (p/shell "clojure" "-M:run" "eval-gate")}
 
+  telemetry:gaps
+  {:doc "Distill candidate gold-set queries from the telemetry log (needs PROPHET_TELEMETRY_PATH) -> EDN"
+   :task (p/shell "clojure" "-M:run" "telemetry-gaps")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

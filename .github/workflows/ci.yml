@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Runs on macos-14 (arm64) so the vendored macos-arm64 vec0.dylib loads — the
+# index/MCP layer needs sqlite-vec, and the linux-x86_64 vec0.so is not yet
+# bundled (going-public plan §4.1). The retrieval gate runs in inert :fts mode
+# (no embedder); the TEI-backed hybrid gate lands with the deployment work (§4.2).
+jobs:
+  ci:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: latest
+          bb: latest
+
+      - name: Cache Clojure deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: deps-${{ hashFiles('deps.edn') }}
+          restore-keys: deps-
+
+      # checks
+      - name: Format check
+        run: bb fmt:check
+      - name: Lint
+        run: bb lint
+      - name: Test
+        run: bb test
+
+      # inert outcome gate (no embedder configured)
+      - name: Extraction fidelity
+        run: bb eval:fidelity
+      - name: Build index
+        run: bb index:rebuild
+      - name: Retrieval gate (fts floors)
+        run: bb eval:gate

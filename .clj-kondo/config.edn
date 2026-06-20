@@ -1,0 +1,3 @@
+;; clj-kondo configuration. Committed so static analysis is identical in CI and
+;; local dev (the .cache/ directory stays gitignored).
+{:hooks {:analyze-call {prophet.index.query/with-db hooks.with-db/with-db}}}

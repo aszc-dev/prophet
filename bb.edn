@@ -50,4 +50,16 @@
 
   test
   {:doc "Run the test suite (JVM)"
-   :task (p/shell "clojure" "-M:test")}}}
+   :task (p/shell "clojure" "-M:test")}
+
+  lint
+  {:doc "Static analysis over src + test (clj-kondo)"
+   :task (p/shell "clojure" "-M:lint")}
+
+  fmt
+  {:doc "Reformat src + test in place (cljfmt)"
+   :task (p/shell "clojure" "-M:fmt" "fix" "src" "test" "deps.edn" "bb.edn")}
+
+  fmt:check
+  {:doc "Verify formatting without writing (cljfmt); non-zero on drift"
+   :task (p/shell "clojure" "-M:fmt" "check" "src" "test" "deps.edn" "bb.edn")}}}

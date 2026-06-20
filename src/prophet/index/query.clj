@@ -134,7 +134,7 @@
                                      snippet(nodes_fts, 2, '[', ']', ' … ', 12) as snippet
                               from nodes_fts f join nodes n on n.id = f.node_id
                               where nodes_fts match ? order by bm25(nodes_fts) limit ?"
-                         (fts-match query) pool)
+                        (fts-match query) pool)
            title-ids (when-let [m (title-match query)]
                        (->> (q conn "select node_id from nodes_fts where nodes_fts match ?
                                      order by bm25(nodes_fts) limit ?" m pool)

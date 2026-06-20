@@ -1,0 +1,32 @@
+# Pre-commit hooks. Install once with `pre-commit install` (see docs/quickstart.md).
+# Formatting/whitespace hooks exclude kb/ — it is the canonical append-only store
+# (CLAUDE.md invariant #1); rewriting it would perturb the content-hash idempotency
+# that makes re-ingest a no-op. gitleaks scans everything, including kb/.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(kb/|web/|resources/native/)
+      - id: end-of-file-fixer
+        exclude: ^(kb/|web/|resources/native/)
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: cljfmt
+        name: cljfmt check
+        entry: bb fmt:check
+        language: system
+        pass_filenames: false
+        files: \.(clj|cljc|cljs|edn)$
+      - id: clj-kondo
+        name: clj-kondo
+        entry: bb lint
+        language: system
+        pass_filenames: false
+        files: \.(clj|cljc|cljs)$

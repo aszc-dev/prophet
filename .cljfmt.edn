@@ -1,0 +1,3 @@
+;; cljfmt configuration. Defaults suit this codebase; the file is committed so
+;; `bb fmt` / `bb fmt:check` behave identically in CI and local dev.
+{}

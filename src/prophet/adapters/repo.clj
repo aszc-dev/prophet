@@ -68,9 +68,8 @@
 (defn- repo-name [dir] (.getName (io/file (str dir))))
 
 ;; RepoAdapter: SourceAdapter over a local git working tree (dir + classify rules
-;; + a stable shortname); reads files and shells out to git. The shortname — not
-;; the clone-dir basename — is the source_key / provenance-ref prefix, so keys are
-;; reproducible across machines and clone paths.
+;; + shortname); reads files and shells out to git. shortname is the source_key /
+;; provenance-ref prefix, so keys stay stable across clone paths.
 (defrecord RepoAdapter [dir rules shortname]
   SourceAdapter
   (discover [_]

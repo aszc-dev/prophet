@@ -7,9 +7,7 @@
  ;; A source without :github -> nil URL (graceful; the raw ref still shows).
  :github "slayerlabs/slayer"
 
- ;; Stable key/provenance-ref prefix, independent of the clone-dir basename, so
- ;; source_keys (and the gold set keyed on them) reproduce no matter where the
- ;; repo is cloned. prophet.provenance resolves `git:slayer@...` via this file.
+ ;; source_key / provenance-ref prefix, so keys stay stable across clone paths.
  :shortname "slayer"
 
  :kind-rules

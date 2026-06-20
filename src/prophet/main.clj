@@ -7,6 +7,7 @@
             [prophet.index.schema :as schema]
             [prophet.index.query :as query]
             [prophet.mcp.server :as mcp]
+            [prophet.mcp.http :as mcp-http]
             [prophet.glossary :as glossary]
             [prophet.web.build :as web]
             [prophet.eval.fidelity :as fidelity]
@@ -75,7 +76,8 @@
    "eval-fidelity" eval-fidelity
    "eval-retrieval" eval-retrieval
    "eval-gate"      eval-gate
-   "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))})
+   "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))
+   "serve-mcp-http" (fn [_] (binding [query/*db-path* db-path] (mcp-http/serve)))})
 
 (defn -main [& args]
   (let [[cmd & rest] args

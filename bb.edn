@@ -40,6 +40,10 @@
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}
 
+  serve:mcp-http
+  {:doc "Start the MCP server over HTTP (POST /mcp, GET /health); loopback, behind a proxy"
+   :task (p/shell "clojure" "-M:run" "serve-mcp-http")}
+
   search
   {:doc "Query the index from the CLI — bb search <terms...>"
    :task (apply p/shell "clojure" "-M:run" "search" *command-line-args*)}

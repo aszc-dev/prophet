@@ -6,28 +6,30 @@
   (:import [org.sqlite SQLiteConfig]
            [java.sql Connection DriverManager]))
 
-(defn- arch-dir
-  "Map the running JVM's OS/arch to the vendored native dir holding vec0."
+(defn- platform
+  "Running JVM OS/arch -> {:dir vendored-native-dir :ext loadable-suffix}."
   []
   (let [os   (.toLowerCase (System/getProperty "os.name"))
         arch (.toLowerCase (System/getProperty "os.arch"))]
     (cond
-      (and (.contains os "mac") (#{"aarch64" "arm64"} arch)) "macos-arm64"
-      (and (.contains os "mac") (.contains arch "x86"))       "macos-x86_64"
+      (and (.contains os "mac")   (#{"aarch64" "arm64"} arch)) {:dir "macos-arm64"   :ext ".dylib"}
+      (and (.contains os "mac")   (.contains arch "x86"))      {:dir "macos-x86_64"  :ext ".dylib"}
+      (and (.contains os "linux") (or (.contains arch "amd") (.contains arch "x86"))) {:dir "linux-x86_64" :ext ".so"}
+      (and (.contains os "linux") (#{"aarch64" "arm64"} arch)) {:dir "linux-aarch64" :ext ".so"}
       :else (throw (ex-info "No vendored sqlite-vec for this platform"
                             {:os os :arch arch})))))
 
 (defn vec0-path
-  "Absolute filesystem path to the vendored vec0 loadable extension.
-   sqlite's load_extension resolves the platform suffix (.dylib/.so), so we hand
-   it the path without extension."
+  "Absolute filesystem path (extension stripped) to the vendored vec0 loadable
+   extension for the running platform. sqlite's load_extension appends the OS
+   suffix (.dylib/.so)."
   []
-  (let [res (io/resource (str "native/" (arch-dir) "/vec0.dylib"))]
+  (let [{:keys [dir ext]} (platform)
+        res (io/resource (str "native/" dir "/vec0" ext))]
     (when-not res
-      (throw (ex-info "vec0 extension not found on classpath" {:arch (arch-dir)})))
-    ;; strip the .dylib so load_extension picks the right suffix per-OS
+      (throw (ex-info "vec0 extension not found on classpath" {:dir dir})))
     (let [p (.getPath (io/file res))]
-      (subs p 0 (- (count p) (count ".dylib"))))))
+      (subs p 0 (- (count p) (count ext))))))
 
 (defn open
   "Open a JDBC Connection to db-path with extension loading enabled and vec0

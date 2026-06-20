@@ -11,13 +11,27 @@
    the cross-lingual EN->PL entries are the ones that suffer — a useful contrast."
   (:require [clojure.edn :as edn]
             [prophet.index.embed :as embed]
-            [prophet.index.query :as query]))
+            [prophet.index.query :as query]
+            [prophet.store.node :as store]))
 
 (def ^:dynamic *gold-path* "eval/retrieval-gold.edn")
 (def ^:private k 10)
 
-(defn load-gold [path]
-  (edn/read-string (slurp path)))
+(defn- source-key->id
+  "Map of stable source_key -> the current node id, from the live store. ULIDs are
+   minted per build (a fresh code-only ingest re-mints them), so the gold set pins
+   source_keys; this resolves them to whatever ids this corpus assigned."
+  []
+  (into {} (map (fn [{n :node}] [(:source_key n) (:id n)])) (store/all-notes)))
+
+(defn load-gold
+  "Read the gold set and resolve each :expect source_key to the current node id.
+   Source keys absent from this corpus are dropped (a coverage gap counts as a
+   miss, not a hit) — keeping the eval honest as the live source drifts."
+  [path]
+  (let [sk->id (source-key->id)]
+    (mapv (fn [entry] (update entry :expect #(into #{} (keep sk->id) %)))
+          (edn/read-string (slurp path)))))
 
 (defn- rank-of
   "1-based rank of the first id in `ids` that is in `expect`, or nil."

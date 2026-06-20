@@ -1,4 +1,7 @@
-;; Retrieval gold set — hand-built PL+EN paraphrase queries -> expected node ids.
+;; Retrieval gold set — hand-built PL+EN paraphrase queries -> expected nodes.
+;; :expect pins stable `source_key`s (repo:path[#anchor]), NOT ULIDs — ULIDs are
+;; minted per build, so a fresh code-only ingest re-mints them. load-gold resolves
+;; each source_key to the current corpus's id at eval time (absent ones drop).
 ;;
 ;; Authored by INTENT, not by echoing current ranking: each :expect is the set of
 ;; nodes that genuinely answer the question (entity-resolution duplicates — a title
@@ -11,52 +14,52 @@
 ;; cross-lingual stress test for the vector lane.
 
 [{:q "Polish private held-out exam sheets to prevent benchmark contamination"
-  :lang :en :expect #{"3RESDB349GMJRER3HZADJGX0FP" "5H578RGTXTWBFHYG0WZ2EFWD9G"}
+  :lang :en :expect #{"slayer:public/data/datasety.json#prywatny_held_out" "slayer:bench/HELDOUT.md"}
   :note "anti-benchmaxxing held-out, EN->PL"}
  {:q "Polish state exam reasoning benchmark"
-  :lang :en :expect #{"02ZWYYGV9RJBABGTXGGTCCWPGJ" "76BNJ0V2V04RJ4AN6S3JTC4HBQ"}
+  :lang :en :expect #{"slayer:public/data/benchmarks.json#llmzszl" "slayer:public/data/datasety.json#llmzszl"}
   :note "LLMzSzŁ (dataset + benchmark)"}
  {:q "grade-school math word problems benchmark"
-  :lang :en :expect #{"7S2PXNNNY3HEE8VWYZ448NF4QG" "4THGCNQ8WJG7ST5WJ5H4ZER1R8"}
+  :lang :en :expect #{"slayer:public/data/datasety.json#gsm8k" "slayer:public/data/benchmarks.json#gsm8k"}
   :note "GSM8K"}
  {:q "competitor analysis of the Bielik model and how to beat it"
-  :lang :en :expect #{"1MFHV0SVDE3SDY67DGAS9S2F1B"}}
+  :lang :en :expect #{"slayer:BIELIK_RECIPE_NOTES.md"}}
  {:q "preference pairs for DPO alignment"
-  :lang :en :expect #{"2QYMXBXECW8ZHCME32Q89MBB56"}}
+  :lang :en :expect #{"slayer:public/data/datasety.json#pary_dpo"}}
  {:q "tokenizer that encodes Polish more densely than Llama"
-  :lang :en :expect #{"2HPSSNNAJGXKDME6SQDWX098B2"}}
+  :lang :en :expect #{"slayer:public/results/experiments.json#polish-bpe-fertility"}}
  {:q "Polish legal acts and statutes dataset"
-  :lang :en :expect #{"6N2EHFR6Y4BK2PDJESJKNSP5RE" "25H8QWMWH4S2JYJAH6J7W0G4KM"}
+  :lang :en :expect #{"slayer:public/data/datasety.json#isap" "slayer:public/data/datasety.json#isap_bhp"}
   :note "ISAP"}
  {:q "multilingual reading comprehension dataset"
-  :lang :en :expect #{"4W39M7ZWA8XDH6BDM5MHJ7A8X3" "0NTE1F6H1ZX3F7ZFVQQ235WKSY"
-                      "4KGRN157502HS8F4FQED4MHFA5" "0ZRVS47Q27HHXTMNP95BJJKAFF"}
+  :lang :en :expect #{"slayer:public/data/datasety.json#belebele" "slayer:public/data/datasety.json#belebele_en"
+                      "slayer:public/data/benchmarks.json#belebele" "slayer:public/data/benchmarks.json#belebele_en"}
   :note "Belebele"}
  {:q "knowledge graph synthesis for long-tail facts"
-  :lang :en :expect #{"5KWQDR24PQB5GSHJXBHB55VGRC" "4PZAZMBVVK8E7FTQW7PSB12V6T"}
+  :lang :en :expect #{"slayer:public/results/experiments.json#entigraph-10m" "slayer:public/results/experiments.json#entigraph-hops"}
   :note "EntiGraph / graf encji"}
  {:q "decontamination audit of the training data pipeline"
-  :lang :en :expect #{"3S4DGFZTDSJMN3TWHYJX1S8T52" "2F7V6SGX6E4WVZBQKYBMAN9HQJ"}
+  :lang :en :expect #{"slayer:V3_DATA_AUDIT.md" "slayer:DATA_LINEAGE.md"}
   :note "data audit / lineage"}
  {:q "benchmark egzaminów medycznych PES"
-  :lang :pl :expect #{"7SMG3DTQNAMHVJPKP2XHBA5DVQ" "5SPWE471S7TRBP3RMMK2DYJ1QG"}}
+  :lang :pl :expect #{"slayer:public/data/datasety.json#pes" "slayer:public/data/benchmarks.json#pes"}}
  {:q "natywność i naturalność polszczyzny"
-  :lang :pl :expect #{"02JKGR3CGJKQFP4XZ8G1VECHCJ"}
+  :lang :pl :expect #{"slayer:bench/POLNATIVE.md"}
   :note "PolNative"}
  {:q "jawny manifest danych treningowych V4"
-  :lang :pl :expect #{"0D0P3TTFM8BMSC0EYB433HGEG9"}}
+  :lang :pl :expect #{"slayer:DATASET_MANIFEST.md"}}
  {:q "protokół anti-forgetting przy style-tuningu"
-  :lang :pl :expect #{"4Q4NKBJ8684KBGTJA0H84QY5KC"}}
+  :lang :pl :expect #{"slayer:plan.md"}}
  {:q "segmentacja morfemów i granice morfologiczne w polskim"
-  :lang :pl :expect #{"6KDXBFS689BSWPNPV32B9B94AH" "6DGME21120C2XG7GV4430W1AV8"}}
+  :lang :pl :expect #{"slayer:public/data/chomsky-sota2026/docs/polish_morpheme_benchmark_protocol.md" "slayer:public/data/chomsky-sota2026/reports/morph_benchmark_report.md"}}
  {:q "korpusy SpeakLeash do pretreningu"
-  :lang :pl :expect #{"070DGXKK7NQZ61TA50E1WSJWHH"}}
+  :lang :pl :expect #{"slayer:public/data/datasety.json#speakleash_pl"}}
  {:q "tłumaczenie maszynowe FLORES"
-  :lang :pl :expect #{"1EJYSMVTH5RKJDKVP7SWS6V9DB" "0V74Y55FQM5CB7CA531TH3VCKS"}}
+  :lang :pl :expect #{"slayer:public/data/datasety.json#flores" "slayer:public/data/benchmarks.json#flores"}}
  {:q "ocena długiego ogona wiedzy o Polsce"
-  :lang :pl :expect #{"1GW5M1MDYER2548SCBK6D2JF00" "45BM9KJKN68J8A337S8RG0PEFB"}
+  :lang :pl :expect #{"slayer:public/results/matrix.json#dlugi-ogon-wiedzy-pl" "slayer:public/results/experiments.json#knowledge-probe-v1"}
   :note "knowledge probe (axis + experiment)"}
  {:q "macierz bazowa SOTA 2026 oś ewaluacji"
-  :lang :pl :expect #{"42JSDPV8N9J7EXWFSPY2SH84HD"}}
+  :lang :pl :expect #{"slayer:public/data/chomsky-sota2026/docs/sota_2026_matrix.md"}}
  {:q "zadania KLEJ Open-PL"
-  :lang :pl :expect #{"2QXRWJY550N56VPS0AY85PF24Z" "2QQ8MB9ZHDJ3J4DSSH0Z3D4GXQ"}}]
+  :lang :pl :expect #{"slayer:public/results/matrix.json#klej-open-pl-klasyfikacja" "slayer:public/results/experiments.json#v2"}}]

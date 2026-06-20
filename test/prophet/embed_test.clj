@@ -17,3 +17,16 @@
 (deftest default-model-is-the-tei-model
   (is (= "Qwen/Qwen3-Embedding-0.6B" embed/default-model)
       "default embedder must match the TEI deployment model (ADR-010)"))
+
+(deftest embed-batch-chunks-to-max-batch
+  (testing "requests are split into <= *max-batch* inputs, order preserved"
+    (let [calls (atom [])]
+      (with-redefs [embed/config (constantly {:url "http://tei:80" :model "m" :api-key nil})
+                    embed/post-json (fn [_ _ body]
+                                      (let [in (:input body)]
+                                        (swap! calls conj (count in))
+                                        {:data (map-indexed (fn [i t] {:index i :embedding [t]}) in)}))]
+        (binding [embed/*max-batch* 2]
+          (let [out (embed/embed-batch ["a" "b" "c" "d" "e"])]
+            (is (= [["a"] ["b"] ["c"] ["d"] ["e"]] out) "all vectors, in input order")
+            (is (= [2 2 1] @calls) "chunked 2+2+1, never above max-batch")))))))

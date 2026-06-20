@@ -54,14 +54,24 @@
       (throw (ex-info "embed endpoint error" {:status (.statusCode resp) :body (.body resp)})))
     (json/read-str (.body resp) :key-fn keyword)))
 
+(def ^:dynamic *max-batch*
+  "Max inputs per /v1/embeddings request. TEI caps the client batch at 32 (413
+   above it), so requests are chunked to this size regardless of corpus size."
+  32)
+
 (defn embed-batch
-  "Embed a seq of strings -> seq of float vectors (length `dim`). Returns nil when
-   no endpoint is configured (inert mode)."
+  "Embed a seq of strings -> seq of float vectors (length `dim`), chunked into
+   requests of at most `*max-batch*` inputs. Returns nil when no endpoint is
+   configured (inert mode)."
   [texts]
   (when-let [{:keys [url model api-key]} (config)]
-    (let [endpoint (str url (when-not (re-find #"/v1/embeddings$" url) "/v1/embeddings"))
-          resp (post-json endpoint api-key (request-body model texts))]
-      (->> (:data resp) (sort-by :index) (map :embedding)))))
+    (let [endpoint (str url (when-not (re-find #"/v1/embeddings$" url) "/v1/embeddings"))]
+      (->> (partition-all *max-batch* texts)
+           (mapcat (fn [chunk]
+                     (->> (:data (post-json endpoint api-key (request-body model chunk)))
+                          (sort-by :index)
+                          (map :embedding))))
+           vec))))
 
 (defn vec->literal
   "sqlite-vec accepts a JSON array literal for a vector value."

@@ -44,7 +44,7 @@
 (defn- post-json [url api-key body]
   (let [client (-> (HttpClient/newBuilder) (.connectTimeout (Duration/ofSeconds 10)) .build)
         req    (-> (HttpRequest/newBuilder (URI/create url))
-                   (.timeout (Duration/ofSeconds 120))
+                   (.timeout (Duration/ofSeconds 300))
                    (.header "Content-Type" "application/json")
                    (cond-> api-key (.header "Authorization" (str "Bearer " api-key)))
                    (.POST (HttpRequest$BodyPublishers/ofString (json/write-str body)))
@@ -55,9 +55,9 @@
     (json/read-str (.body resp) :key-fn keyword)))
 
 (def ^:dynamic *max-batch*
-  "Max inputs per /v1/embeddings request. TEI caps the client batch at 32 (413
-   above it), so requests are chunked to this size regardless of corpus size."
-  32)
+  "Max inputs per /v1/embeddings request. Under TEI's 32-item client cap, and kept
+   small so a request stays well within the timeout on a slow CPU backend."
+  8)
 
 (defn embed-batch
   "Embed a seq of strings -> seq of float vectors (length `dim`), chunked into

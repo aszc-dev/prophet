@@ -8,6 +8,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [prophet.mcp.server :as server]
+            [prophet.mcp.telemetry :as tel]
             [prophet.index.query :as query])
   (:import [com.sun.net.httpserver HttpServer HttpHandler HttpExchange SimpleFileServer]
            [java.net InetSocketAddress]
@@ -21,6 +22,13 @@
   (* 1 1024 1024))
 
 (defn- log [& xs] (binding [*out* *err*] (apply println "[mcp-http]" xs)))
+
+(defn traceparent-trace-id
+  "Trace-id field of a W3C `traceparent` header (00-<trace>-<span>-<flags>), or nil."
+  [tp]
+  (when tp
+    (let [parts (str/split tp #"-")]
+      (when (>= (count parts) 2) (nth parts 1)))))
 
 (defn parse-allowlist
   "Parse MCP_ALLOWED_ORIGINS (comma-separated) into a seq of origins, or nil."
@@ -88,13 +96,17 @@
               (send-json! ex 401 {:error "unauthorized"})
 
               :else
-              (let [t0  (System/currentTimeMillis)
-                    req (json/read-str (read-body ex) :key-fn keyword)
-                    resp (server/handle req)]
-                (log (:method req) (str (- (System/currentTimeMillis) t0) "ms"))
-                (if resp
-                  (send-json! ex 200 resp)
-                  (send-json! ex 202 {})))))
+              (let [tp (.getFirst headers "traceparent")]
+                (log "traceparent" (if tp "present" "absent"))
+                (binding [tel/*transport*  "http"
+                          tel/*session-id* (or (traceparent-trace-id tp) (str (random-uuid)))]
+                  (let [t0  (System/currentTimeMillis)
+                        req (json/read-str (read-body ex) :key-fn keyword)
+                        resp (server/handle req)]
+                    (log (:method req) (str (- (System/currentTimeMillis) t0) "ms"))
+                    (if resp
+                      (send-json! ex 200 resp)
+                      (send-json! ex 202 {})))))))
           (catch Exception e
             (let [status (or (:status (ex-data e)) 400)]
               (log "error" status (.getMessage e))

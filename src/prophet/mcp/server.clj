@@ -4,7 +4,8 @@
    protocol only — all logging goes to stderr."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
-            [prophet.index.query :as query]))
+            [prophet.index.query :as query]
+            [prophet.mcp.telemetry :as tel]))
 
 (def supported-protocol-versions
   "MCP protocol versions this server speaks, newest first. On `initialize` the
@@ -89,14 +90,20 @@
           tool (by-name tool-name)]
       (if-not tool
         (rpc-error id -32602 (str "unknown tool: " tool-name))
-        (try
-          (let [out ((:handler tool) (or args {}))]
-            (result id {:content [{:type "text" :text (json/write-str out)}]
-                        :isError false}))
-          (catch Exception e
-            (log "tool error" tool-name (.getMessage e))
-            (result id {:content [{:type "text" :text (str "error: " (.getMessage e))}]
-                        :isError true})))))
+        (let [t0 (System/currentTimeMillis)]
+          (try
+            (let [out ((:handler tool) (or args {}))]
+              (tel/emit! {:tool tool-name :args args :out out
+                          :latency-ms (- (System/currentTimeMillis) t0)})
+              (result id {:content [{:type "text" :text (json/write-str out)}]
+                          :isError false}))
+            (catch Exception e
+              (log "tool error" tool-name (.getMessage e))
+              (tel/emit! {:tool tool-name :args args
+                          :latency-ms (- (System/currentTimeMillis) t0)
+                          :error? true :error-msg (.getMessage e)})
+              (result id {:content [{:type "text" :text (str "error: " (.getMessage e))}]
+                          :isError true}))))))
 
     (rpc-error id -32601 (str "method not found: " method))))
 
@@ -104,15 +111,17 @@
   "Run the stdio loop. Blocks until stdin closes."
   []
   (log "serving on stdio; db =" query/*db-path*)
-  (let [r (java.io.BufferedReader. *in*)
-        w *out*]
-    (loop []
-      (when-let [line (.readLine r)]
-        (when-not (str/blank? line)
-          (let [resp (try (handle (json/read-str line :key-fn keyword))
-                          (catch Exception e
-                            (rpc-error nil -32700 (str "parse error: " (.getMessage e)))))]
-            (when resp
-              (.write w (str (json/write-str resp) "\n"))
-              (.flush w))))
-        (recur)))))
+  (binding [tel/*session-id* (str (random-uuid))
+            tel/*transport* "stdio"]
+    (let [r (java.io.BufferedReader. *in*)
+          w *out*]
+      (loop []
+        (when-let [line (.readLine r)]
+          (when-not (str/blank? line)
+            (let [resp (try (handle (json/read-str line :key-fn keyword))
+                            (catch Exception e
+                              (rpc-error nil -32700 (str "parse error: " (.getMessage e)))))]
+              (when resp
+                (.write w (str (json/write-str resp) "\n"))
+                (.flush w))))
+          (recur))))))

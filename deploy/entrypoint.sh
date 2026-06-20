@@ -4,20 +4,25 @@
 set -euo pipefail
 
 SRC="${PROPHET_SOURCE_DIR:-examples/sample-source}"
+# Config selects resources/sources/<CFG>.edn kind-rules; default = dir basename.
+CFG="${PROPHET_SOURCE_CONFIG:-}"
 
 if [ -n "${PROPHET_SOURCE_REPO:-}" ]; then
-  SRC=/data/source
+  CFG="${PROPHET_SOURCE_CONFIG:-slayer}"
+  # clone into a dir named after the config so the provenance repo-name matches
+  # (git:<CFG>@... refs and the source's GitHub blob mapping).
+  SRC="/data/$CFG"
   if [ -d "$SRC/.git" ]; then
     echo "[entrypoint] pull $PROPHET_SOURCE_REPO"
     git -C "$SRC" pull --ff-only
   else
-    echo "[entrypoint] clone $PROPHET_SOURCE_REPO"
+    echo "[entrypoint] clone $PROPHET_SOURCE_REPO -> $SRC"
     git clone --depth 1 "$PROPHET_SOURCE_REPO" "$SRC"
   fi
 fi
 
-echo "[entrypoint] ingest: $SRC"
-bb ingest:repo "$SRC"
+echo "[entrypoint] ingest: $SRC (config: ${CFG:-<basename>})"
+if [ -n "$CFG" ]; then bb ingest:repo "$SRC" "$CFG"; else bb ingest:repo "$SRC"; fi
 echo "[entrypoint] glossary"
 bb glossary:build || echo "[entrypoint] glossary:build skipped"
 echo "[entrypoint] index"

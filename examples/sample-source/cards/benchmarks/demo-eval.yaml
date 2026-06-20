@@ -1,0 +1,6 @@
+type: benchmark
+name: DemoEval
+id: demo-eval
+short: DemoEval
+license: demo
+description: Illustrative likelihood-style eval for the quickstart fixture, n=10.

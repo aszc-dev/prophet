@@ -1,0 +1,7 @@
+name: demo-sft
+base_model: demo-base
+method: sft
+lr: 0.00002
+epochs: 1
+dataset: demo-corpus-pl
+description: Illustrative SFT recipe for the quickstart fixture.

@@ -1,0 +1,8 @@
+[
+  {"id": "demo-ds-1", "nazwa": "Demo Dataset One", "opis": "Pierwszy zbior demo.",
+   "tagi": ["demo"], "rozmiar": 100, "licencja": "demo", "status": "current",
+   "kategoria": "sft", "link": "https://example.com/1"},
+  {"id": "demo-ds-2", "nazwa": "Demo Dataset Two", "opis": "Drugi zbior demo.",
+   "tagi": ["demo"], "rozmiar": 200, "licencja": "demo", "status": "current",
+   "kategoria": "dpo", "link": "https://example.com/2"}
+]

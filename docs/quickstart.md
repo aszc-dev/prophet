@@ -15,10 +15,10 @@ hybrid retrieval is one section down.
 | Docker | any | only to run a TEI embedder for hybrid mode (optional) |
 | pre-commit | 4.x | optional, for the commit hooks |
 
-**Native-lib caveat (`vec0`).** The sqlite-vec loadable extension is vendored for
-**macOS arm64 only** (`resources/native/macos-arm64/`). The index layer therefore
-runs today on Apple Silicon; the linux-x86_64 `vec0.so` lands with the deployment
-work (going-public plan §4.1).
+**Native-lib note (`vec0`).** The sqlite-vec loadable extension is vendored under
+`resources/native/` for macOS arm64, linux-x86_64, and linux-aarch64;
+`index/db.clj` picks the right one by `{os,arch}` at runtime. So the index layer
+runs on Apple Silicon dev and the Linux deploy host alike.
 
 ## Runtime split (ADR-006)
 

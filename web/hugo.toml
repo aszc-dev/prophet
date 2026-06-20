@@ -1,7 +1,7 @@
-# Hugo config for the Slayer KB roamable web. The content/ dir is GENERATED from
+# Hugo config for the Prophet roamable web. The content/ dir is GENERATED from
 # kb/ by `bb web:build` — never hand-edit it.
 baseURL = "/"
-title = "Slayer KB"
+title = "Prophet"
 enableGitInfo = false
 
 # the generated bodies already contain links/HTML we emit deterministically

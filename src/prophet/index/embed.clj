@@ -8,9 +8,18 @@
             HttpResponse$BodyHandlers]
            [java.time Duration]))
 
+(def native-dim
+  "The model's native embedding width (Qwen3-Embedding-0.6B = 1024)."
+  1024)
+
 (def dim
   "Embedding vector dimension; pinned at 1024 to match the vec0 table and model."
   1024)
+
+(def default-model
+  "Default embedding model — the TEI deployment's model (ADR-010). Overridable via
+   SLAYER_EMBED_MODEL; document and query vectors must come from the same model."
+  "Qwen/Qwen3-Embedding-0.6B")
 
 (def ^:dynamic *disabled*
   "Force inert mode regardless of env (tests bind this true for determinism)."
@@ -21,9 +30,16 @@
   []
   (when-let [url (and (not *disabled*) (System/getenv "SLAYER_EMBED_URL"))]
     {:url     url
-     :model   (or (System/getenv "SLAYER_EMBED_MODEL")
-                  "mlx-community/Qwen3-Embedding-0.6B-8bit")
+     :model   (or (System/getenv "SLAYER_EMBED_MODEL") default-model)
      :api-key (System/getenv "SLAYER_EMBED_API_KEY")}))
+
+(defn request-body
+  "OpenAI /v1/embeddings request body for `model` over `texts`. Sends `:dimensions`
+   only for genuine MRL truncation (dim < native width); omits it at native width,
+   where some servers (incl. TEI) 400 on the param — ADR-009/010."
+  [model texts]
+  (cond-> {:model model :input (vec texts)}
+    (not= dim native-dim) (assoc :dimensions dim)))
 
 (defn- post-json [url api-key body]
   (let [client (-> (HttpClient/newBuilder) (.connectTimeout (Duration/ofSeconds 10)) .build)
@@ -44,7 +60,7 @@
   [texts]
   (when-let [{:keys [url model api-key]} (config)]
     (let [endpoint (str url (when-not (re-find #"/v1/embeddings$" url) "/v1/embeddings"))
-          resp (post-json endpoint api-key {:model model :input (vec texts) :dimensions dim})]
+          resp (post-json endpoint api-key (request-body model texts))]
       (->> (:data resp) (sort-by :index) (map :embedding)))))
 
 (defn vec->literal

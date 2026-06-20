@@ -55,3 +55,16 @@ jobs:
         run: bb index:rebuild
       - name: Search returns the fixture node with provenance
         run: bb search DemoEval | grep -q DemoEval
+
+  # Deploy only after CI is green, and only on push to main (not PRs). Triggers a
+  # Coolify rebuild of the app, which reruns the pipeline against the live source.
+  deploy:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify deploy
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            "${{ secrets.COOLIFY_BASE_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_APP_UUID }}"

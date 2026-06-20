@@ -89,10 +89,12 @@ queue.
 
 ## Interfaces
 
-- **MCP** for LLMs: `search`, `get_node`, `traverse`, `whats_new`,
-  `write_observation`, `propose_node`, `propose_link`. (Signatures in
-  data-contracts.md.) Reads open; writes provenance-gated; new nodes/links
-  land in a review queue rather than the live graph.
+- **MCP** for LLMs. **Implemented today (v0):** five read tools — `search`,
+  `get_node`, `traverse`, `neighbors`, `whats_new`. Reads are open; there are no
+  write tools (ADR-008). **Planned (v1.5, not implemented):** `write_observation`,
+  `propose_node`, `propose_link` — provenance-gated writes whose new nodes/links
+  land in a review queue rather than the live graph. (Signatures in
+  data-contracts.md.)
 - **Web** for humans: Hugo renders the note store. `visibility: public` → public
   build; `visibility: internal` → auth-gated build. Backlinks + a graph view make
   it roamable; share-by-link is just a node URL.

@@ -182,9 +182,12 @@ Verbs and semantics; parameter detail can be refined during implementation.
 | `traverse(id, rel?, depth?)` | Follow typed links, multi-hop | none |
 | `neighbors(id)` | Adjacent nodes | none |
 | `whats_new(since, moc?)` | Recency feed for situational awareness | none |
-| `write_observation(node_id, text, provenance)` | Append an observation | append-only; `provenance` required |
-| `propose_node(draft)` | Submit a candidate new node | enters review queue, not live graph |
-| `propose_link(src, rel, dst)` | Submit a candidate edge | enters review queue |
+| `write_observation(node_id, text, provenance)` *(planned, v1.5)* | Append an observation | append-only; `provenance` required |
+| `propose_node(draft)` *(planned, v1.5)* | Submit a candidate new node | enters review queue, not live graph |
+| `propose_link(src, rel, dst)` *(planned, v1.5)* | Submit a candidate edge | enters review queue |
+
+The first five tools are **implemented** (v0, read-only). The three write tools
+are **planned for v1.5 and not yet implemented** (ADR-008: no write tools in v0).
 
 Read/write split is intentional: reads are open; writes are provenance-gated;
 new nodes and links land in a **review queue**, not directly in the shared graph.

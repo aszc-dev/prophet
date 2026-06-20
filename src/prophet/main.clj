@@ -11,6 +11,7 @@
             [prophet.web.build :as web]
             [prophet.eval.fidelity :as fidelity]
             [prophet.eval.retrieval :as retrieval]
+            [prophet.store.node :as store]
             [prophet.ingest :as ingest]))
 
 (def ^:private db-path "kb.db")
@@ -57,6 +58,11 @@
     (pp/print-table (map #(select-keys % [:score :type :title :snippet])
                          (query/search (str/join " " args))))))
 
+(defn- stats [_]
+  (let [nodes (map :node (store/all-notes))]
+    (prn {:nodes (count nodes)
+          :by-type (into (sorted-map) (frequencies (map :type nodes)))})))
+
 (def ^:private commands
   {"smoke"         smoke
    "ingest-repo"   ingest-repo
@@ -64,6 +70,7 @@
    "glossary-define" glossary-define
    "index-rebuild" index-rebuild
    "search"        search
+   "stats"         stats
    "web-build"     web-build
    "eval-fidelity" eval-fidelity
    "eval-retrieval" eval-retrieval

@@ -2,12 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Slayer KB
+## Prophet
 
-A shared, provenance-first knowledge base for the **Slayer** applied-research lab
-(Polish LLMs). It ingests heterogeneous sources into a graph of human-readable,
-LLM-queryable notes and serves both audiences: humans via a roamable static web,
-LLMs via MCP.
+Prophet is a shared, provenance-first knowledge base for the **Slayer**
+applied-research lab (Polish LLMs). It ingests heterogeneous sources into a graph
+of human-readable, LLM-queryable notes and serves both audiences: humans via a
+roamable static web, LLMs via MCP. ("Slayer" is the lab; Prophet is this project.)
 
 Source priority: **curated artifacts first** (the lab's Hugo site + the
 `slayerlabs` repos), **firehose later** (Discord, possibly Slack).
@@ -53,11 +53,12 @@ Source priority: **curated artifacts first** (the lab's Hugo site + the
 ## Current state (2026-06-18)
 
 **v0 + v0.5 implemented.** Git repo: **github.com/aszc-dev/prophet** (private),
-branch `main`. See `HANDOFF.md` for the full pick-up brief. Five design docs live at
-the **repo root**, not in a `docs/` subdir (`docs/` holds only the v0.5 brief). Code
-is under `src/slayer_kb/`; the note store is `kb/` (75 real nodes from
-`slayerlabs/slayer`); `kb.db` is the derived index; `web/` is the Hugo site;
-`fixtures/recipes/` is a test source repo.
+branch `main`. See `docs/dev-log.md` for the development log. The design docs live
+under `docs/` (`architecture`, `data-contracts`, `ingest-repo`, `roadmap`,
+`decisions`, plus `v0.5-brief`). Code is under `src/prophet/`; the note store is
+`kb/` (run `bb stats` for the live node count + per-type breakdown — currently 157
+nodes from `slayerlabs/slayer`); `kb.db` is the derived index; `web/` is the Hugo
+site; `fixtures/recipes/` is a local, gitignored test source repo.
 
 v0.5 adds: glossary concept nodes (`bb glossary:build`) and a roamable Hugo web
 (`bb web:build`) with provenance→GitHub links, backlinks, ego-graphs, MOC pages,
@@ -92,42 +93,53 @@ does **not** (only completions); use **omlx** (`omlx serve`, model symlinked und
 `~/.omlx/models/<org>/<name>/`). Dimension pinned at 1024 (`embed/*disabled*` binds
 inert for hermetic tests).
 
-**Not yet done:** glossary auto-extraction + Hugo web (v0.5), Discord/Tier B (v1),
-synthesis + write tools (v1.5), hybrid-blend tuning (needs the endpoint + real data).
+**Shipped:** v0 (Tier-A repo ingest → index → MCP) and v0.5 (glossary concept
+nodes via `bb glossary:build`, roamable Hugo web via `bb web:build`).
+**Not yet done:** Discord/Tier B (v1); synthesis + write tools (v1.5); the
+MLX→TEI embedder migration and hybrid-blend tuning (the going-public plan; needs
+the TEI endpoint + real data).
 
-## Repo layout (intended)
+## Repo layout
 
 ```
-prophet/                    # local repo dir (project name: Slayer KB)
+prophet/                    # repo (project: Prophet)
   CLAUDE.md                 # this file
-  docs/                     # design docs (CURRENTLY at repo root, not here)
+  docs/                     # design docs
     architecture.md         # system design, tiers, pipeline stages
     data-contracts.md       # RawItem, Node schema, extraction JSON, SQLite DDL, MCP tools
     ingest-repo.md          # repo -> knowledge in detail; source-adapter seam
     roadmap.md              # milestones v0 -> v1.5 with acceptance criteria
     decisions.md            # ADRs (settled design decisions + rationale)
-  src/slayer_kb/            # Clojure source
+    v0.5-brief.md           # v0.5 scoping brief
+    dev-log.md              # development log (session narration)
+  src/prophet/              # Clojure source
     adapters/               # source adapters (repo, later discord) -> RawItem
     extract/                # per-kind extractors
     resolve/                # entity resolution + linking
     store/                  # md+YAML read/write
     index/                  # sqlite + fts + vec
-    synth/                  # synthesis / rollup
     mcp/                    # MCP server + tools
+    synth/                  # synthesis / rollup (planned, v1.5 — not built)
   bb.edn                    # Babashka tasks
-  kb/                       # the note store (md+YAML) — the source of truth (own git repo or submodule)
+  kb/                       # the note store (md+YAML) — the source of truth
 ```
 
-## Commands (target — define in bb.edn as implemented; none exist yet)
+## Commands
+
+Defined in `bb.edn` (run `bb tasks` for the full list). The pipeline-facing ones:
 
 - `bb ingest:repo <repo>` — incremental ingest of a source repo into `kb/`
+- `bb glossary:build` — derive glossary concept nodes from `kb/`
 - `bb index:rebuild` — rebuild the SQLite/vector index from `kb/`
-- `bb serve:mcp` — start the MCP server
 - `bb web:build` — Hugo build (emits public + internal)
+- `bb serve:mcp` — start the MCP server (stdio)
+- `bb search <terms>` — query the index from the CLI
+- `bb stats` — machine-readable corpus summary (node count + per-type)
+- `bb eval:retrieval` / `bb eval:gate` — retrieval scorecard + regression gate
 
 ## Where to start
 
-Read the root design docs in this order: **architecture → data-contracts →
+Read the design docs under `docs/` in this order: **architecture → data-contracts →
 ingest-repo → roadmap → decisions.** Build strictly in roadmap milestone order. Do **not** skip
 v0 (Tier A, repo only) to chase Discord — v0 bootstraps the canonical entity
 vocabulary that later sources depend on, and it delivers onboarding value with no

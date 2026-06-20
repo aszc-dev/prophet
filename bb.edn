@@ -44,6 +44,10 @@
   {:doc "Query the index from the CLI — bb search <terms...>"
    :task (apply p/shell "clojure" "-M:run" "search" *command-line-args*)}
 
+  stats
+  {:doc "Machine-readable corpus summary (EDN): node count + per-type breakdown"
+   :task (p/shell "clojure" "-M:run" "stats")}
+
   smoke
   {:doc "Spike check: confirm the JVM index layer loads sqlite-vec + FTS5"
    :task (p/shell "clojure" "-M:run" "smoke")}

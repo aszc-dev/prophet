@@ -1,0 +1,15 @@
+# keep the image code-only and lean
+.git
+kb/
+kb.db
+*.db
+web/public/
+web/content/
+web/content-internal/
+web/resources/
+web/.hugo_build.lock
+.cpcache/
+.clj-kondo/.cache/
+target/
+.env
+fixtures/

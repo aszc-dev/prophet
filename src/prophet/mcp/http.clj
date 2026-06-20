@@ -5,9 +5,10 @@
    loopback behind a reverse proxy (TLS + domain + rate limiting at the edge).
    stdout is left clean; access logs go to stderr."
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [prophet.mcp.server :as server]
             [prophet.index.query :as query])
-  (:import [com.sun.net.httpserver HttpServer HttpHandler HttpExchange]
+  (:import [com.sun.net.httpserver HttpServer HttpHandler HttpExchange SimpleFileServer]
            [java.net InetSocketAddress]
            [java.io ByteArrayOutputStream]
            [java.nio.charset StandardCharsets]
@@ -77,9 +78,16 @@
   (let [port (Integer/parseInt (or (System/getenv "MCP_HTTP_PORT")
                                    (System/getenv "PORT") "8765"))
         host (or (System/getenv "MCP_HTTP_HOST") "127.0.0.1")
-        srv  (HttpServer/create (InetSocketAddress. host (int port)) 0)]
+        srv  (HttpServer/create (InetSocketAddress. host (int port)) 0)
+        web  (System/getenv "PROPHET_WEB_DIR")]
     (.createContext srv "/mcp" (mcp-handler))
     (.createContext srv "/health" (health-handler))
+    ;; Optionally serve the static Hugo build at / from the same process; /mcp and
+    ;; /health win by longest-prefix match.
+    (when (and web (.isDirectory (io/file web)))
+      (.createContext srv "/" (SimpleFileServer/createFileHandler
+                               (.toAbsolutePath (.toPath (io/file web)))))
+      (log "serving static site from" web))
     (.setExecutor srv (Executors/newFixedThreadPool 4))
     (.start srv)
     (log "serving on" (str "http://" host ":" port) "(/mcp, /health); db =" query/*db-path*)

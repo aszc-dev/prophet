@@ -77,7 +77,6 @@
         ok    (get freq :ok 0)
         hard  (reduce + (map #(get freq % 0) hard-stubs))
         dang  (get freq :dangling 0)
-        ;; per node type
         by-type (->> (group-by :type rows)
                      (map (fn [[t rs]]
                             (let [tt (count rs)

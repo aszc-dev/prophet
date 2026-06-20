@@ -7,6 +7,7 @@
 
 ;; Hugo section -> {:type :moc}. Data table; the lab tunes it.
 (def default-section-map
+  "Hugo section name -> {:type :moc} for pages; falls back to :concept when unmapped."
   {"eksperymenty" {:type :experiment :moc "trening"}
    "datasety"     {:type :dataset    :moc "dane"}
    "benchmarks"   {:type :benchmark  :moc "ewaluacja"}

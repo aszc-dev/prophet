@@ -8,7 +8,9 @@
             HttpResponse$BodyHandlers]
            [java.time Duration]))
 
-(def dim 1024)
+(def dim
+  "Embedding vector dimension; pinned at 1024 to match the vec0 table and model."
+  1024)
 
 (def ^:dynamic *disabled*
   "Force inert mode regardless of env (tests bind this true for determinism)."

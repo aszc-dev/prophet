@@ -1,6 +1,7 @@
 (ns prophet.core-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
+            [clojure.string :as string]
             [prophet.adapters.repo :as repo]
             [prophet.extract.log :as log]
             [prophet.extract.page :as page]
@@ -197,7 +198,7 @@
 (deftest flatten-body-captures-blocks
   (testing "table -> cells, no leading pipe (was :stub-table)"
     (let [t (common/flatten-body "| pole | znaczenie |\n|---|---|\n| id | klucz |")]
-      (is (not (clojure.string/starts-with? t "|")) "no leading pipe")
+      (is (not (string/starts-with? t "|")) "no leading pipe")
       (is (re-find #"pole \| znaczenie" t))
       (is (re-find #"id \| klucz" t) "data rows kept")
       (is (not (re-find #"---" t)) "separator row dropped")))

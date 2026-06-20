@@ -13,6 +13,8 @@
 ;; --- tool registry ---------------------------------------------------------
 
 (def tools
+  "The v0 read-only MCP tool registry: each entry carries name, description,
+   inputSchema, and a handler delegating to prophet.index.query."
   [{:name "search"
     :description "Primary entry point for ANY question about the Slayer applied-research lab (Polish LLM training): its datasets, benchmarks, experiments, evaluation axes, training recipes, and glossary terms. Hybrid retrieval (lexical BM25 + semantic vector + exact-alias, RRF-fused) — cross-lingual, so an English question retrieves Polish-titled nodes. Returns ranked nodes with stable ids, types, and provenance-bearing snippets. Each result includes source_url (a GitHub blob link at the pinned commit) — cite it for every claim drawn from that node. Start here, then call get_node or traverse on the ids it returns."
     :inputSchema {:type "object"

@@ -9,7 +9,9 @@
             [clj-yaml.core :as yaml]
             [prophet.util :as util]))
 
-(def ^:dynamic *kb-root* "kb")
+(def ^:dynamic *kb-root*
+  "Filesystem root of the note store; all node paths resolve under it."
+  "kb")
 
 ;; --- frontmatter <-> map ---------------------------------------------------
 
@@ -36,7 +38,9 @@
                    (str "- " (when (seq (str date)) (str date " ")) "[" ref "] " text)))
        "\n"))
 
-(defn node->md [node]
+(defn node->md
+  "Node map -> on-disk note string: ordered YAML frontmatter + rendered prose body."
+  [node]
   (str "---\n"
        (yaml/generate-string (ordered-frontmatter node) :dumper-options {:flow-style :block})
        "---\n"
@@ -56,7 +60,9 @@
 
 ;; --- paths -----------------------------------------------------------------
 
-(defn node-path [{:keys [id type title]}]
+(defn node-path
+  "Node -> its canonical File under *kb-root*: <type>/<slug>-<id-tail>.md."
+  [{:keys [id type title]}]
   (io/file *kb-root* (name type)
            (str (util/slug title) "-" (subs id (max 0 (- (count id) 8))) ".md")))
 

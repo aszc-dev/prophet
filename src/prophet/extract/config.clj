@@ -2,8 +2,7 @@
   "Training/recipe configs -> `recipe` nodes + params. v0 handles YAML; TOML is
    deferred (recognized by the adapter, skipped here with a warning). Deterministic."
   (:require [clojure.string :as str]
-            [clj-yaml.core :as yaml]
-            [prophet.extract.common :as c]))
+            [clj-yaml.core :as yaml]))
 
 (defn- params->obs [m ref]
   (->> [:model :base_model :lr :learning_rate :epochs :batch_size :method

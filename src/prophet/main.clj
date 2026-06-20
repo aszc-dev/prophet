@@ -57,9 +57,6 @@
     (pp/print-table (map #(select-keys % [:score :type :title :snippet])
                          (query/search (str/join " " args))))))
 
-(defn- todo [cmd]
-  (fn [_] (println (str cmd ": not implemented yet (v0 in progress)"))))
-
 (def ^:private commands
   {"smoke"         smoke
    "ingest-repo"   ingest-repo

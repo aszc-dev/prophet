@@ -8,6 +8,8 @@
             [prophet.util :as util]))
 
 (defprotocol SourceAdapter
+  "Source-ingest seam: a source (repo, later Discord) -> RawItem seq. Nothing
+   source-specific crosses this boundary."
   (discover [this]       "-> seq of refs (repo-relative paths) that exist")
   (fetch    [this ref]   "-> RawItem for a ref")
   (changed  [this since] "-> seq of refs changed since a cursor (sha)"))
@@ -15,6 +17,7 @@
 ;; path -> kind rules. Data, not code: the lab tunes these without touching the
 ;; engine (ingest-repo.md §1). First matching glob wins.
 (def default-kind-rules
+  "Ordered [glob kind] rules: first matching glob assigns a repo path its kind."
   [["content/**/*.md"        :page]
    ["cards/**/*.md"          :card]
    ["cards/**/*.yaml"        :card]
@@ -58,10 +61,14 @@
       (throw (ex-info "git failed" {:args args :err err})))
     (str/trim out)))
 
-(defn head-sha [dir] (git dir "rev-parse" "HEAD"))
+(defn head-sha
+  "Repo dir -> its HEAD commit sha (shells out to git)."
+  [dir] (git dir "rev-parse" "HEAD"))
 
 (defn- repo-name [dir] (.getName (io/file (str dir))))
 
+;; RepoAdapter: SourceAdapter over a local git working tree (dir + classify rules);
+;; reads files and shells out to git.
 (defrecord RepoAdapter [dir rules]
   SourceAdapter
   (discover [_]
@@ -96,5 +103,6 @@
          (filter #(classify rules %)))))
 
 (defn adapter
+  "Construct a RepoAdapter for a repo dir (default kind rules unless given)."
   ([dir] (adapter dir default-kind-rules))
   ([dir rules] (->RepoAdapter dir rules)))

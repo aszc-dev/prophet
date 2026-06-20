@@ -10,6 +10,8 @@
             [prophet.index.embed :as embed]))
 
 (def ddl
+  "Ordered DDL statements building the derived index: nodes/links/provenance/aliases
+   tables plus the FTS5 and vec0 virtual tables."
   ["create table nodes (
       id text primary key, type text not null, title text not null,
       status text not null, visibility text not null, moc text,

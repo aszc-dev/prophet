@@ -1,3 +1,7 @@
+# the note store — code-only repo (DECISIONS-NEEDED #1): kb/ is built locally or
+# on the deploy host from a private source, never committed here.
+kb/
+
 # derived index — rebuildable from kb/ (invariant #1), never source of truth
 kb.db
 *.db

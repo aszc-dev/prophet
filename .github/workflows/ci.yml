@@ -7,8 +7,13 @@ on:
 
 # Runs on macos-14 (arm64) so the vendored macos-arm64 vec0.dylib loads — the
 # index/MCP layer needs sqlite-vec, and the linux-x86_64 vec0.so is not yet
-# bundled (going-public plan §4.1). The retrieval gate runs in inert :fts mode
-# (no embedder); the TEI-backed hybrid gate lands with the deployment work (§4.2).
+# bundled (going-public plan §4.1).
+#
+# This is a code-only repo (DECISIONS-NEEDED #1): the real kb/ corpus is not
+# shipped, so the retrieval gate (eval:gate, gold set tied to real ULIDs) runs on
+# the deploy host, not here. CI instead drives the full pipeline on the bundled
+# fixture (ingest -> index -> search). The TEI-backed hybrid gate lands with the
+# deployment work (§4.2).
 jobs:
   ci:
     runs-on: macos-14
@@ -43,10 +48,10 @@ jobs:
       - name: Test
         run: bb test
 
-      # inert outcome gate (no embedder configured)
-      - name: Extraction fidelity
-        run: bb eval:fidelity
+      # end-to-end pipeline smoke on the bundled fixture (no embedder, no real corpus)
+      - name: Ingest fixture
+        run: bb ingest:repo examples/sample-source
       - name: Build index
         run: bb index:rebuild
-      - name: Retrieval gate (fts floors)
-        run: bb eval:gate
+      - name: Search returns the fixture node with provenance
+        run: bb search DemoEval | grep -q DemoEval

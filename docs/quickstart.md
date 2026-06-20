@@ -26,41 +26,40 @@ sqlite-vec loads only under a full JVM, never under Babashka. So every
 index-touching `bb` task shells out to `clojure -M:run <cmd>`. Pure transforms
 (`extract/*`, `resolve/*`, adapters) are runtime-agnostic.
 
+## The note store is not shipped (code-only)
+
+This repo is **code-only** (`DECISIONS-NEEDED.md` #1): the real `kb/` corpus is
+built locally or on the deploy host from a private source, and `kb/` is
+gitignored. A fresh clone has no corpus — you build one by ingesting a source.
+
 ## Smallest end-to-end loop (no embedder)
+
+A tiny throwaway source ships at `examples/sample-source/` (a card, a config, a
+content page) so the loop runs on a clean clone:
 
 ```sh
 # optional: install commit hooks
 pre-commit install
 
-# 1. derive the index from the bundled note store (kb/)
+# 1. ingest a source into kb/ (deterministic; re-running is a no-op)
+bb ingest:repo examples/sample-source
+
+# 2. derive the index from kb/
 bb index:rebuild
 
-# 2. search — ranked nodes, each with a provenance ref
-bb search "held-out"
+# 3. search — ranked nodes, each with a provenance ref
+bb search "DemoEval"
 
 # corpus summary (machine-readable EDN)
 bb stats
 ```
 
 `bb search` returns nodes whose observations carry `git:<repo>@<sha>:<path>`
-provenance refs. No network, no GPU, no model required.
-
-## Ingest a source
-
-`bb ingest:repo` turns a source repo into nodes under `kb/`. A tiny throwaway
-source ships at `examples/sample-source/` (a card, a config, a content page):
-
-```sh
-bb ingest:repo examples/sample-source   # creates 3 demo nodes in kb/
-bb index:rebuild
-bb search "DemoEval"
-
-# the demo nodes are not part of the canonical corpus — revert them:
-git checkout -- kb/ && git clean -fdq kb/
-```
-
-Ingest is deterministic: a second run with no source change is a no-op (stable
-ULIDs via `source_key`, content-hash skip).
+provenance refs. No network, no GPU, no model required. Point `bb ingest:repo` at
+a real source repo (e.g. a clone of the lab's content) to build the full corpus;
+`bb eval:retrieval` / `bb eval:gate` then score it against `eval/retrieval-gold.edn`
+(the gold set references real corpus node ids, so it is meaningful only with the
+real corpus present).
 
 ## Enabling hybrid retrieval (optional)
 

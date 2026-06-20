@@ -21,9 +21,11 @@ node and claim carries an exact provenance ref.
 - **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools), and the
   MLX→TEI embedder migration + public deployment (see `DECISIONS-NEEDED.md` and
   the going-public plan).
-- The corpus is ≈157 nodes from `slayerlabs/slayer` — run `bb stats` for the live
-  count and per-type breakdown, and `bb eval:retrieval` for the retrieval
-  scorecard. (Figures here are regenerable, never transcribed.)
+- **Code-only repo.** The `kb/` corpus (≈157 nodes from `slayerlabs/slayer`) is
+  built locally or on the deploy host from a private source — it is **not shipped
+  here** (`DECISIONS-NEEDED.md` #1). With a corpus present, `bb stats` reports the
+  live node count and `bb eval:retrieval` the retrieval scorecard. (Figures are
+  regenerable, never transcribed.)
 
 The live MCP surface is exactly five **read** tools — `search`, `get_node`,
 `traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008).
@@ -44,12 +46,14 @@ anchors. Synthesis and Tier B are planned (v1/v1.5). Full design:
 
 ## Quickstart
 
-Runs on a clean clone with no embedder (FTS + alias + graph). See
+Runs on a clean clone with no embedder (FTS + alias + graph). The corpus is not
+shipped, so build one from the bundled fixture. See
 [`docs/quickstart.md`](docs/quickstart.md):
 
 ```sh
-bb index:rebuild          # derive kb.db from the note store
-bb search "held-out"      # ranked nodes, each with a provenance ref
+bb ingest:repo examples/sample-source   # build kb/ from a tiny demo source
+bb index:rebuild                         # derive kb.db from kb/
+bb search "DemoEval"                     # ranked nodes, each with a provenance ref
 ```
 
 ## Repo map
@@ -57,7 +61,7 @@ bb search "held-out"      # ranked nodes, each with a provenance ref
 | Path | What |
 |---|---|
 | `src/prophet/` | Clojure source (adapters, extract, resolve, store, index, mcp) |
-| `kb/` | the note store (md+YAML) — the source of truth |
+| `kb/` | the note store (md+YAML) — source of truth; gitignored, built locally/on host |
 | `kb.db` | derived SQLite/vector index (rebuildable from `kb/`) |
 | `docs/` | design docs (architecture, data-contracts, ingest-repo, roadmap, decisions) |
 | `eval/` | retrieval gold set |

@@ -55,10 +55,12 @@ Source priority: **curated artifacts first** (the lab's Hugo site + the
 **v0 + v0.5 implemented.** Git repo: **github.com/aszc-dev/prophet** (private),
 branch `main`. See `docs/dev-log.md` for the development log. The design docs live
 under `docs/` (`architecture`, `data-contracts`, `ingest-repo`, `roadmap`,
-`decisions`, plus `v0.5-brief`). Code is under `src/prophet/`; the note store is
-`kb/` (run `bb stats` for the live node count + per-type breakdown — currently 157
-nodes from `slayerlabs/slayer`); `kb.db` is the derived index; `web/` is the Hugo
-site; `fixtures/recipes/` is a local, gitignored test source repo.
+`decisions`, plus `v0.5-brief`). Code is under `src/prophet/`. The note store
+`kb/` is **gitignored** — this is a code-only repo (DECISIONS-NEEDED #1); `kb/` is
+built locally or on the deploy host from a private source (`bb ingest:repo`), then
+`bb stats` reports the live node count (≈157 from `slayerlabs/slayer`). `kb.db` is
+the derived index; `web/` is the Hugo site; `fixtures/recipes/` and
+`examples/sample-source/` are test sources (the latter tracked, for the quickstart).
 
 v0.5 adds: glossary concept nodes (`bb glossary:build`) and a roamable Hugo web
 (`bb web:build`) with provenance→GitHub links, backlinks, ego-graphs, MOC pages,
@@ -121,7 +123,7 @@ prophet/                    # repo (project: Prophet)
     mcp/                    # MCP server + tools
     synth/                  # synthesis / rollup (planned, v1.5 — not built)
   bb.edn                    # Babashka tasks
-  kb/                       # the note store (md+YAML) — the source of truth
+  kb/                       # the note store (md+YAML) — source of truth; gitignored (code-only)
 ```
 
 ## Commands

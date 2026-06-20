@@ -6,7 +6,16 @@
             [clojure.string :as str]
             [prophet.index.query :as query]))
 
-(def ^:private protocol-version "2024-11-05")
+(def supported-protocol-versions
+  "MCP protocol versions this server speaks, newest first. On `initialize` the
+   client's requested version is echoed if listed here, otherwise the newest is
+   returned (spec-compliant negotiation)."
+  ["2025-06-18" "2025-03-26" "2024-11-05"])
+
+(def latest-protocol-version (first supported-protocol-versions))
+
+(def server-instructions
+  "Slayer KB (Polish LLM research lab): provenance-first, read-only. Start with `search` (hybrid, cross-lingual — English queries hit Polish-titled nodes), then `get_node`/`traverse` on the ids returned. Cite the `source_url` (commit-pinned GitHub blob) for every claim. Use `whats_new` for situational awareness.")
 
 (defn- log [& xs] (binding [*out* *err*] (apply println "[mcp]" xs)))
 
@@ -60,9 +69,13 @@
   [{:keys [id method params]}]
   (case method
     "initialize"
-    (result id {:protocolVersion protocol-version
-                :capabilities {:tools {}}
-                :serverInfo {:name "prophet" :version "0.0-v0"}})
+    (let [requested (:protocolVersion params)]
+      (result id {:protocolVersion (if (some #{requested} supported-protocol-versions)
+                                     requested
+                                     latest-protocol-version)
+                  :capabilities {:tools {}}
+                  :serverInfo {:name "prophet" :version "0.5.0-preview"}
+                  :instructions server-instructions}))
 
     ("notifications/initialized" "notifications/cancelled") nil
 

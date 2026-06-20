@@ -6,12 +6,14 @@
    stdout is left clean; access logs go to stderr."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [prophet.mcp.server :as server]
             [prophet.index.query :as query])
   (:import [com.sun.net.httpserver HttpServer HttpHandler HttpExchange SimpleFileServer]
            [java.net InetSocketAddress]
            [java.io ByteArrayOutputStream]
            [java.nio.charset StandardCharsets]
+           [java.security MessageDigest]
            [java.util.concurrent Executors]))
 
 (def ^:private max-body
@@ -19,6 +21,32 @@
   (* 1 1024 1024))
 
 (defn- log [& xs] (binding [*out* *err*] (apply println "[mcp-http]" xs)))
+
+(defn parse-allowlist
+  "Parse MCP_ALLOWED_ORIGINS (comma-separated) into a seq of origins, or nil."
+  [s]
+  (when-not (str/blank? s)
+    (seq (remove str/blank? (map str/trim (str/split s #","))))))
+
+(defn allowed-origin?
+  "True if `origin` is permitted under parsed allowlist `allowed`. An empty/nil
+   allowlist allows all; a nil `Origin` (non-browser clients omit it) is allowed;
+   otherwise the origin must be a member of the allowlist."
+  [allowed origin]
+  (or (empty? allowed)
+      (nil? origin)
+      (boolean (some #{origin} allowed))))
+
+(defn- ct-eq? [^String a ^String b]
+  (MessageDigest/isEqual (.getBytes a StandardCharsets/UTF_8)
+                         (.getBytes b StandardCharsets/UTF_8)))
+
+(defn authorized?
+  "True if the Authorization `header` carries the configured bearer `token`. A
+   nil/blank token means auth is disabled (open). Compare is constant-time."
+  [token header]
+  (or (str/blank? token)
+      (boolean (and header (ct-eq? (str "Bearer " token) header)))))
 
 (defn- send-json! [^HttpExchange ex status obj]
   (let [body (.getBytes (json/write-str obj) StandardCharsets/UTF_8)]
@@ -44,15 +72,29 @@
     (handle [_ ex]
       (let [^HttpExchange ex ex]
         (try
-          (if (not= "POST" (.getRequestMethod ex))
-            (send-json! ex 405 {:error "method not allowed"})
-            (let [t0  (System/currentTimeMillis)
-                  req (json/read-str (read-body ex) :key-fn keyword)
-                  resp (server/handle req)]
-              (log (:method req) (str (- (System/currentTimeMillis) t0) "ms"))
-              (if resp
-                (send-json! ex 200 resp)
-                (send-json! ex 202 {}))))
+          (let [headers (.getRequestHeaders ex)
+                origin  (.getFirst headers "Origin")
+                auth    (.getFirst headers "Authorization")
+                allowed (parse-allowlist (System/getenv "MCP_ALLOWED_ORIGINS"))
+                token   (System/getenv "MCP_AUTH_TOKEN")]
+            (cond
+              (not= "POST" (.getRequestMethod ex))
+              (send-json! ex 405 {:error "method not allowed"})
+
+              (not (allowed-origin? allowed origin))
+              (send-json! ex 403 {:error "origin not allowed"})
+
+              (not (authorized? token auth))
+              (send-json! ex 401 {:error "unauthorized"})
+
+              :else
+              (let [t0  (System/currentTimeMillis)
+                    req (json/read-str (read-body ex) :key-fn keyword)
+                    resp (server/handle req)]
+                (log (:method req) (str (- (System/currentTimeMillis) t0) "ms"))
+                (if resp
+                  (send-json! ex 200 resp)
+                  (send-json! ex 202 {})))))
           (catch Exception e
             (let [status (or (:status (ex-data e)) 400)]
               (log "error" status (.getMessage e))

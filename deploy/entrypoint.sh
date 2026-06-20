@@ -25,6 +25,18 @@ echo "[entrypoint] ingest: $SRC (config: ${CFG:-<basename>})"
 if [ -n "$CFG" ]; then bb ingest:repo "$SRC" "$CFG"; else bb ingest:repo "$SRC"; fi
 echo "[entrypoint] glossary"
 bb glossary:build || echo "[entrypoint] glossary:build skipped"
+
+# Wait for the embedder before index:rebuild — TEI downloads the model on first
+# boot (minutes). Without this the embed lane would silently go inert (FTS-only).
+if [ -n "${SLAYER_EMBED_URL:-}" ]; then
+  base="${SLAYER_EMBED_URL%/}"; base="${base%/v1/embeddings}"
+  echo "[entrypoint] waiting for embedder at $base/health"
+  for _ in $(seq 1 120); do
+    curl -sf "$base/health" >/dev/null 2>&1 && { echo "[entrypoint] embedder ready"; break; }
+    sleep 5
+  done
+fi
+
 echo "[entrypoint] index"
 bb index:rebuild
 if command -v hugo >/dev/null 2>&1; then

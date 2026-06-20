@@ -7,7 +7,7 @@
  :aliases
  {;; JVM entrypoint for everything that touches the index (sqlite-vec needs the JVM).
   ;; bb tasks shell out to: clojure -M:run <command> <args...>
-  :run {:main-opts ["-m" "slayer-kb.main"]}
+  :run {:main-opts ["-m" "prophet.main"]}
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}}

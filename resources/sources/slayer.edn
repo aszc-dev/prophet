@@ -2,7 +2,12 @@
 ;; The knowledge lives in structured JSON under public/, not in content/*.md, so
 ;; the kind-table and the JSON field-mappings are source-specific. A different
 ;; source = a different config; downstream stages do not change.
-{:kind-rules
+{;; org/repo on GitHub for this source's shortname. Read-path only: the provenance
+ ;; renderer (prophet.provenance) maps a `git:slayer@...` ref to a blob URL.
+ ;; A source without :github -> nil URL (graceful; the raw ref still shows).
+ :github "slayerlabs/slayer"
+
+ :kind-rules
  [["public/data/datasety.json"       :json]
   ["public/data/benchmarks.json"     :json]
   ["public/results/experiments.json" :json]

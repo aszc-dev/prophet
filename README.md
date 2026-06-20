@@ -22,8 +22,8 @@ node and claim carries an exact provenance ref.
   MLX→TEI embedder migration + public deployment (see `DECISIONS-NEEDED.md` and
   the going-public plan).
 - **Code-only repo.** The `kb/` corpus (≈157 nodes from `slayerlabs/slayer`) is
-  built locally or on the deploy host from a private source — it is **not shipped
-  here** (`DECISIONS-NEEDED.md` #1). With a corpus present, `bb stats` reports the
+  built locally or on the deploy host from its source repo `slayerlabs/slayer` —
+  it is **not shipped here** (`DECISIONS-NEEDED.md` #1). With a corpus present, `bb stats` reports the
   live node count and `bb eval:retrieval` the retrieval scorecard. (Figures are
   regenerable, never transcribed.)
 

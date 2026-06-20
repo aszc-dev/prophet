@@ -16,8 +16,8 @@ days.
   limits; protocol output stays on stdout, logs on stderr.
 - **Corpus contents.** The `kb/` note store can contain data lineage,
   contamination detail, and source URLs. Whether `kb/` ships publicly is an open
-  decision (`DECISIONS-NEEDED.md`, #1); the recommended posture is code-only,
-  with `kb/` built on the deploy host from a private source.
+  decision (`DECISIONS-NEEDED.md`, #1); the posture is code-only, with `kb/` built
+  on the deploy host from its source repo and not redistributed by this repo.
 - **Secrets.** No credentials belong in the repo. A `gitleaks` pre-commit hook
   scans staged changes; embedder endpoints and keys are read from the
   environment (`SLAYER_EMBED_*`), never committed.

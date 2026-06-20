@@ -57,7 +57,8 @@ branch `main`. See `docs/dev-log.md` for the development log. The design docs li
 under `docs/` (`architecture`, `data-contracts`, `ingest-repo`, `roadmap`,
 `decisions`, plus `v0.5-brief`). Code is under `src/prophet/`. The note store
 `kb/` is **gitignored** — this is a code-only repo (DECISIONS-NEEDED #1); `kb/` is
-built locally or on the deploy host from a private source (`bb ingest:repo`), then
+built locally or on the deploy host from its source repo `slayerlabs/slayer`
+(`bb ingest:repo`), then
 `bb stats` reports the live node count (≈157 from `slayerlabs/slayer`). `kb.db` is
 the derived index; `web/` is the Hugo site; `fixtures/recipes/` and
 `examples/sample-source/` are test sources (the latter tracked, for the quickstart).

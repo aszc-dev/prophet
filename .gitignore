@@ -21,6 +21,9 @@ web/public/
 web/resources/
 web/.hugo_build.lock
 
+# local environment / secrets — never commit (.env.example is the tracked template)
+.env
+
 # local Claude Code session state
 .claude/
 

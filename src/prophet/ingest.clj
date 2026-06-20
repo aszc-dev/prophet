@@ -64,7 +64,8 @@
   ([dir] (ingest-repo! dir (.getName (io/file dir))))
   ([dir config-name]
    (let [cfg       (load-config config-name)
-         a         (repo/adapter dir (or (:kind-rules cfg) repo/default-kind-rules))
+         shortname (or (:shortname cfg) config-name)
+         a         (repo/adapter dir (or (:kind-rules cfg) repo/default-kind-rules) shortname)
          refs      (repo/discover a)
          existing  (mapv :node (store/all-notes))
          extracted (->> refs (map #(repo/fetch a %)) (mapcat #(extract-for % cfg)) (remove nil?))

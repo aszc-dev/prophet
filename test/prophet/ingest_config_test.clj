@@ -4,6 +4,7 @@
    slayer's JSON lives under public/data/, which only the slayer rules classify."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [prophet.adapters.repo :as repo]
             [prophet.ingest :as ingest]
             [prophet.index.embed :as embed]
@@ -32,3 +33,19 @@
         (binding [store/*kb-root* (str tmp "/default")]
           (let [res (ingest/ingest-repo! fixture)]
             (is (zero? (:nodes res)))))))))
+
+(deftest source-key-prefix-comes-from-the-config-not-the-dir
+  (testing "ingesting a dir named 'slayer-fixture' under config 'slayer' keys on
+            'slayer:' — so source_keys and provenance refs are stable regardless
+            of the clone directory name (the gold-set/Gate-B trap)"
+    (let [tmp (str (io/file (System/getProperty "java.io.tmpdir")
+                            (str "prophet-sk-" (System/nanoTime))))]
+      (binding [embed/*disabled* true
+                store/*kb-root* (str tmp "/sk")]
+        (ingest/ingest-repo! fixture "slayer")
+        (let [keys (keep (comp :source_key :node) (store/all-notes))]
+          (is (seq keys))
+          (is (some #(str/starts-with? % "slayer:") keys)
+              "source_keys use the config shortname")
+          (is (not-any? #(str/starts-with? % "slayer-fixture:") keys)
+              "the clone-dir basename must not leak into source_keys"))))))

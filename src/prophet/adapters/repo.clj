@@ -67,9 +67,11 @@
 
 (defn- repo-name [dir] (.getName (io/file (str dir))))
 
-;; RepoAdapter: SourceAdapter over a local git working tree (dir + classify rules);
-;; reads files and shells out to git.
-(defrecord RepoAdapter [dir rules]
+;; RepoAdapter: SourceAdapter over a local git working tree (dir + classify rules
+;; + a stable shortname); reads files and shells out to git. The shortname — not
+;; the clone-dir basename — is the source_key / provenance-ref prefix, so keys are
+;; reproducible across machines and clone paths.
+(defrecord RepoAdapter [dir rules shortname]
   SourceAdapter
   (discover [_]
     (let [root (io/file dir)]
@@ -85,14 +87,15 @@
           file (io/file dir ref)
           body (when-not (= kind :data) (slurp file)) ; blobs: reference-only
           sha  (head-sha dir)
-          prov (str "git:" (repo-name dir) "@" sha ":" ref)]
+          name (or shortname (repo-name dir))
+          prov (str "git:" name "@" sha ":" ref)]
       {:id           (util/sha256 (str "git:" ref))
        :source       :git
        :ref          prov
        :kind         kind
        :title        ref
        :body         (or body "")
-       :meta         {:repo (repo-name dir) :sha sha :path ref}
+       :meta         {:repo name :sha sha :path ref}
        :content-hash (util/sha256 (str (or body ref)))
        :fetched-at   (str (java.time.Instant/now))}))
 
@@ -103,6 +106,9 @@
          (filter #(classify rules %)))))
 
 (defn adapter
-  "Construct a RepoAdapter for a repo dir (default kind rules unless given)."
-  ([dir] (adapter dir default-kind-rules))
-  ([dir rules] (->RepoAdapter dir rules)))
+  "Construct a RepoAdapter for a repo dir (default kind rules unless given). The
+   optional shortname overrides the clone-dir basename as the key/provenance
+   prefix; nil falls back to the basename."
+  ([dir] (adapter dir default-kind-rules nil))
+  ([dir rules] (adapter dir rules nil))
+  ([dir rules shortname] (->RepoAdapter dir rules shortname)))

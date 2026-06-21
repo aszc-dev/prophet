@@ -18,9 +18,11 @@ node and claim carries an exact provenance ref.
 - **Shipped:** v0 (Tier-A repo ingest → index → MCP read tools) and v0.5 (glossary
   concept nodes, roamable Hugo web with provenance→GitHub links, backlinks,
   ego-graphs, public/internal split).
-- **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools), and the
-  MLX→TEI embedder migration + public deployment (see `DECISIONS-NEEDED.md` and
-  the going-public plan).
+- **Demo/preview (ADR-013):** runs on macOS with the local **omlx** embedder and a
+  **stdio** MCP — build a corpus, `claude mcp add`, and go (see [Connect](#connect)).
+  Hosted online inference + a public HTTP deployment are deferred to Slayer.
+- **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools). Going-public
+  decisions: `DECISIONS-NEEDED.md`.
 - **Code-only repo.** The `kb/` corpus (≈157 nodes from `slayerlabs/slayer`) is
   built locally or on the deploy host from its source repo `slayerlabs/slayer` —
   it is **not shipped here** (`DECISIONS-NEEDED.md` #1). With a corpus present, `bb stats` reports the
@@ -28,12 +30,13 @@ node and claim carries an exact provenance ref.
   regenerable, never transcribed.)
 
 The live MCP surface is exactly five **read** tools — `search`, `get_node`,
-`traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008). The HTTP
-transport is **stateless Streamable HTTP**: JSON-RPC over `POST /mcp`, `GET /mcp`
-→ 405 (no server-initiated stream), `GET /health` for liveness. It negotiates the
-client's `MCP-Protocol-Version` and supports optional `Origin` allowlisting
-(`MCP_ALLOWED_ORIGINS`) and static Bearer auth (`MCP_AUTH_TOKEN`). The stdio
-transport also works for all clients.
+`traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008). The
+demo/preview serves these over the **stdio** transport (`bb serve:mcp`; ADR-013).
+The **HTTP** transport — used by the parked hosted deployment — is **stateless
+Streamable HTTP**: JSON-RPC over `POST /mcp`, `GET /mcp` → 405 (no server-initiated
+stream), `GET /health` for liveness; it negotiates the client's
+`MCP-Protocol-Version` and supports optional `Origin` allowlisting
+(`MCP_ALLOWED_ORIGINS`) and static Bearer auth (`MCP_AUTH_TOKEN`).
 
 ## Architecture at a glance
 
@@ -63,33 +66,35 @@ bb search "DemoEval"                     # ranked nodes, each with a provenance 
 
 ## Connect
 
-Point any MCP client at the deployment's `https://<DOMAIN>/mcp`. Per-client,
-copy-paste configs (Claude Code, Claude Desktop, Codex, Cursor, the API connector)
-are in [`CONNECT.md`](CONNECT.md). The public preview is open (no token); reads
-only, provenance-pinned, cross-lingual.
+**Current (demo/preview): local stdio.** Build a corpus (Quickstart above), start
+the local omlx embedder, then register the stdio server with Claude in one line
+(replace `/path/to/prophet` and the omlx key):
+
+```sh
+claude mcp add slayer-kb -s user \
+  --env SLAYER_EMBED_URL=http://127.0.0.1:10240 \
+  --env SLAYER_EMBED_API_KEY=<omlx-key> \
+  --env SLAYER_EMBED_MODEL=Qwen3-Embedding-0.6B-8bit \
+  -- /bin/sh -c 'cd /path/to/prophet && exec "$(command -v clojure)" -M:run serve-mcp'
+```
+
+Per-client copy-paste configs (stdio now; HTTP for the parked hosted deployment) are
+in [`CONNECT.md`](CONNECT.md). Reads only, provenance-pinned, cross-lingual.
+
+**Parked:** a public HTTP endpoint (`https://<DOMAIN>/mcp`) returns once Slayer hosts
+the embedder (ADR-013).
 
 ## Self-host
 
-Run the whole stack (prophet + the pinned TEI embedder) with Docker Compose:
+**Demo/preview — macOS + omlx (current, ADR-013).** No containers: install the
+JVM/Clojure toolchain, run the local omlx embedder, then ingest → index → serve over
+stdio. Full steps in [`docs/quickstart.md`](docs/quickstart.md).
 
-```sh
-docker compose up            # builds the corpus from the bundled fixture
-# MCP at  http://localhost:8765/mcp   (web at http://localhost:8765)
-claude mcp add --transport http prophet http://localhost:8765/mcp
-```
-
-That default needs zero credentials and serves a 3-node demo corpus in `:mode
-:hybrid` (TEI embeds the fixture). To serve the real public corpus, set:
-
-```sh
-PROPHET_SOURCE_REPO=https://github.com/slayerlabs/slayer
-PROPHET_SOURCE_CONFIG=slayer
-```
-
-The bundled `tei` service provides hybrid retrieval out of the box
-(`SLAYER_EMBED_URL=http://tei:80`). TEI CPU images are amd64-only; on an arm64 dev
-machine the image runs under emulation and TEI inference is unreliable — hybrid is
-verified on native amd64 (CI + the deploy host).
+**Parked — Docker Compose + hosted embedder (future).** The containerized stack
+(prophet + a hosted embedder, MCP-HTTP + static web in one image, `docker-compose.yml`)
+is kept for when Slayer provides online inference. omlx is Apple-Silicon-only, so it
+cannot run in the Linux container — the container path is inherently the
+hosted-inference path, and it returns with the public deployment (ADR-013).
 
 ## Repo map
 

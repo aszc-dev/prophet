@@ -36,7 +36,7 @@ index-touching `bb` task shells out to `clojure -M:run <cmd>`. Pure transforms
 
 ## The note store is not shipped (code-only)
 
-This repo is **code-only** (`DECISIONS-NEEDED.md` #1): the real `kb/` corpus is
+This repo is **code-only** (ADR-014): the real `kb/` corpus is
 built locally or on the deploy host from its source repo (`slayerlabs/slayer`),
 and `kb/` is gitignored. A fresh clone has no corpus — you build one by ingesting
 a source.

@@ -1,4 +1,4 @@
-# the note store — code-only repo (DECISIONS-NEEDED #1): kb/ is built locally or
+# the note store — code-only repo (ADR-014): kb/ is built locally or
 # on the deploy host from its source repo (slayerlabs/slayer), never committed here.
 kb/
 
@@ -30,6 +30,11 @@ web/.hugo_build.lock
 
 # local Claude Code session state
 .claude/
+
+# internal working notes — never published (folded into docs/decisions.md ADR-014)
+/DECISIONS-NEEDED.md
+/prophet-going-public-brief.md
+/docs/dev-log.md
 
 # macOS
 .DS_Store

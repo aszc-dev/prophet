@@ -55,10 +55,10 @@ Source priority: **curated artifacts first** (the lab's Hugo site + the
 ## Current state (2026-06-18)
 
 **v0 + v0.5 implemented.** Git repo: **github.com/aszc-dev/prophet** (private),
-branch `main`. See `docs/dev-log.md` for the development log. The design docs live
+branch `main`. The design docs live
 under `docs/` (`architecture`, `data-contracts`, `ingest-repo`, `roadmap`,
 `decisions`, plus `v0.5-brief`). Code is under `src/prophet/`. The note store
-`kb/` is **gitignored** — this is a code-only repo (DECISIONS-NEEDED #1); `kb/` is
+`kb/` is **gitignored** — this is a code-only repo (ADR-014); `kb/` is
 built locally or on the deploy host from its source repo `slayerlabs/slayer`
 (`bb ingest:repo`), then
 `bb stats` reports the live node count (≈157 from `slayerlabs/slayer`). `kb.db` is
@@ -98,14 +98,14 @@ at native width. `embed/*disabled*` binds inert for hermetic tests. The model +
 runtime are the contract — vectors are not interchangeable across runtimes.
 
 The demo/preview serves **MCP over stdio** on macOS (`bb serve:mcp`, register with
-`claude mcp add`). The containerized path (Docker + TEI/Gemini + Coolify) is parked
+`claude mcp add`). The containerized path (Docker + TEI/Gemini) is parked
 for the future hosted phase (ADR-013).
 
 **Shipped:** v0 (Tier-A repo ingest → index → MCP) and v0.5 (glossary concept
 nodes via `bb glossary:build`, roamable Hugo web via `bb web:build`). Demo/preview
 runs on macOS with the local omlx embedder and stdio MCP (ADR-013); the index is
 `:hybrid` against the omlx 1024-d baseline. **Parked:** hosted/online inference and
-the containerized deployment (Docker + TEI/Gemini + Coolify) — deferred to Slayer
+the containerized deployment (Docker + TEI/Gemini) — deferred to Slayer
 (ADR-013). **Not yet done:** Discord/Tier B (v1); synthesis + write tools (v1.5).
 
 ## Repo layout
@@ -114,7 +114,7 @@ the containerized deployment (Docker + TEI/Gemini + Coolify) — deferred to Sla
 prophet/                    # repo (project: Prophet)
   CLAUDE.md                 # this file
   docs/                     # design docs (architecture, data-contracts, ingest-repo,
-                            #   roadmap, decisions, quickstart, v0.5-brief, dev-log)
+                            #   roadmap, decisions, quickstart, v0.5-brief)
   src/prophet/              # Clojure source
     main.clj                # JVM CLI entrypoint (bb tasks shell out here)
     ingest.clj              # ingest driver; load-config per source

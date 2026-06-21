@@ -11,13 +11,12 @@ days.
 
 - **Public exposure.** Prophet is intended to serve a public MCP endpoint and a
   static web build. The MCP surface is read-only (five tools; no write tools,
-  ADR-008). When the deployment hardening lands (going-public plan §4.3–§4.4),
-  the server runs behind a reverse proxy with rate limiting and request-size
-  limits; protocol output stays on stdout, logs on stderr.
-- **Corpus contents.** The `kb/` note store can contain data lineage,
-  contamination detail, and source URLs. Whether `kb/` ships publicly is an open
-  decision (`DECISIONS-NEEDED.md`, #1); the posture is code-only, with `kb/` built
-  on the deploy host from its source repo and not redistributed by this repo.
+  ADR-008). When the deployment hardening lands, the server runs behind a reverse
+  proxy with rate limiting and request-size limits; protocol output stays on
+  stdout, logs on stderr.
+- **Corpus contents.** The `kb/` note store can contain data lineage and source
+  URLs. The posture is code-only (ADR-014): `kb/` is built on the deploy host from
+  its source repo and is not redistributed by this repo.
 - **Secrets.** No credentials belong in the repo. A `gitleaks` pre-commit hook
   scans staged changes; embedder endpoints and keys are read from the
   environment (`SLAYER_EMBED_*`), never committed.

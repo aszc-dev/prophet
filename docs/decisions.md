@@ -184,9 +184,10 @@ schema: request `dimensions: 1024` (or truncate client-side) for a minimal quali
 drop and no migration. Stub vs real embeddings is therefore a **data** decision,
 never a schema one.
 
-**Serving (operational) — SUPERSEDED by ADR-010.** The original serving guidance
-(omlx for dev) is kept here as history; the production embedding runtime is now
-**TEI** (ADR-010). The dimension-pin decision above still stands. The endpoint was
+**Serving (operational) — SUPERSEDED (see ADR-010, then ADR-013).** The original
+serving guidance (omlx for dev) is kept here as history. The runtime later moved to
+**TEI** (ADR-010), then back to **local omlx** for the demo phase with TEI/hosted
+parked (ADR-013, current). The dimension-pin decision above still stands. The endpoint was
 **omlx** (`omlx serve`, model symlinked under `~/.omlx/models/<org>/<name>/`),
 **not** `mlx_lm.server` — the latter exposes only completions, not
 `/v1/embeddings`. Two gotchas, both load-bearing:
@@ -217,6 +218,10 @@ honors `dimensions: 1024` before pinning a larger model; until then keep 0.6B,
 whose native width already is 1024.
 
 ## ADR-010 — TEI is the embedding runtime (supersedes ADR-009's serving section)
+
+**Status: SUPERSEDED for the demo phase by ADR-013.** TEI and the containerized path
+are *parked* (the future hosted phase); the current demo/preview runtime is local
+omlx. The decision below is retained as history.
 
 **Context.** Qwen3-Embedding vectors are **not interchangeable across runtimes**:
 the same text embedded by different runtimes (omlx/MLX vs TEI vs vLLM) can land at
@@ -318,7 +323,7 @@ omlx** server:
   come from omlx; vectors are not interchangeable across runtimes.
 
 **Status of prior decisions.** ADR-010 (TEI) and the containerized deployment
-(Docker + Coolify, MCP-HTTP + static site) are **parked**, not removed — they are the
+(Docker, MCP-HTTP + static site) are **parked**, not removed — they are the
 future *hosted* path. omlx is Apple-Silicon-only and cannot run in the Linux
 container, so the container path is inherently the hosted-inference path. ADR-012
 (Gemini) is **withdrawn (not adopted)**.
@@ -340,3 +345,24 @@ choice and re-run Gate B against it.
 
 **Risks.** The demo depends on the maintainer's Mac + omlx being up; not suitable for
 always-on public exposure (that waits on the deferred hosted path).
+
+## ADR-014 — Going-public decisions: code-only repo, identity `prophet`, MIT license
+
+The three decisions that gated the public release are settled and recorded here; the
+working notes that tracked them are no longer kept in the tree.
+
+**1. Code-only, no `kb/` corpus — DECIDED.** The repository ships code only. The
+`kb/` note store holds the lab's private data lineage, so it is untracked,
+gitignored, and was purged from git history; it is never redistributed here. The
+corpus is rebuilt locally or on the deploy host from its public source repo
+`slayerlabs/slayer` (`bb ingest:repo`), and only `visibility: public` nodes reach the
+public web/MCP. Licensing of `kb/` content is a separate question, out of scope for
+this code repo.
+
+**2. One public identity — `prophet` — DECIDED.** The repo, the namespace tree
+(`src/prophet/`), `deps.edn` `:main-opts`, and the MCP `serverInfo.name` are all
+`prophet`. Provenance refs to the upstream `slayerlabs/slayer` are unchanged.
+
+**3. License — MIT — DECIDED.** `LICENSE` (SPDX `MIT`) at the repo root covers the
+code; it is referenced from the README. `kb/` content licensing is deferred with
+decision 1.

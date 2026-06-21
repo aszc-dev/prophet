@@ -21,11 +21,10 @@ node and claim carries an exact provenance ref.
 - **Demo/preview (ADR-013):** runs on macOS with the local **omlx** embedder and a
   **stdio** MCP — build a corpus, `claude mcp add`, and go (see [Connect](#connect)).
   Hosted online inference + a public HTTP deployment are deferred to Slayer.
-- **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools). Going-public
-  decisions: `DECISIONS-NEEDED.md`.
+- **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools).
 - **Code-only repo.** The `kb/` corpus (≈157 nodes from `slayerlabs/slayer`) is
   built locally or on the deploy host from its source repo `slayerlabs/slayer` —
-  it is **not shipped here** (`DECISIONS-NEEDED.md` #1). With a corpus present, `bb stats` reports the
+  it is **not shipped here** (see ADR-014 in [`docs/decisions.md`](docs/decisions.md)). With a corpus present, `bb stats` reports the
   live node count and `bb eval:retrieval` the retrieval scorecard. (Figures are
   regenerable, never transcribed.)
 
@@ -116,5 +115,4 @@ hosted-inference path, and it returns with the public deployment (ADR-013).
   → [ingest-repo](docs/ingest-repo.md) → [roadmap](docs/roadmap.md) →
   [decisions](docs/decisions.md).
 - License: [MIT](LICENSE) (covers the code; `kb/` content is a separate question).
-- Open decisions for going public: [`DECISIONS-NEEDED.md`](DECISIONS-NEEDED.md).
 - Security: [`SECURITY.md`](SECURITY.md).

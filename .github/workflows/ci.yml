@@ -8,12 +8,12 @@ on:
 # Runs on linux-x86_64 — the deploy arch — so the vendored linux-x86_64 vec0.so
 # loads and `bb smoke` actually exercises the prod native-lib path (P1-6).
 #
-# This is a code-only repo (DECISIONS-NEEDED #1): the real kb/ corpus is not
+# This is a code-only repo (ADR-014): the real kb/ corpus is not
 # shipped, so the retrieval gate (eval:gate, gold set tied to real ULIDs) runs on
 # the host, not here. CI drives the full pipeline on the bundled fixture (ingest ->
 # index -> search). The hybrid gate (omlx, ADR-013) runs on the host.
 #
-# The containerized path (Docker + TEI/Gemini + Coolify) is parked for the future
+# The containerized path (Docker + TEI/Gemini) is parked for the future
 # hosted phase (ADR-013); its compose-smoke + deploy jobs were removed from this
 # workflow and live in git history.
 jobs:

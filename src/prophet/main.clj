@@ -9,6 +9,7 @@
             [prophet.mcp.server :as mcp]
             [prophet.mcp.http :as mcp-http]
             [prophet.glossary :as glossary]
+            [prophet.synthesis :as synthesis]
             [prophet.web.build :as web]
             [prophet.eval.fidelity :as fidelity]
             [prophet.eval.retrieval :as retrieval]
@@ -39,6 +40,17 @@
 
 (defn- web-build [_]
   (println "web:" (pr-str (web/build!))))
+
+(defn- synthesis-run [_]
+  (let [tally (synthesis/run!)
+        orph  (synthesis/orphans)]
+    (println "synthesis:" (pr-str tally))
+    (println "orphan-claim States:" (count orph))
+    ;; runner + CI gate in one: the runtime guard never writes an unresolvable ref,
+    ;; so any orphan here is a provenance-invariant breach -> fail (ADR-016).
+    (when (seq orph)
+      (doseq [{:keys [id ref]} orph] (println "  ORPHAN" id ref))
+      (System/exit 1))))
 
 (defn- eval-fidelity [_]
   (fidelity/scan!))
@@ -116,6 +128,7 @@
    "search"        search
    "stats"         stats
    "web-build"     web-build
+   "synthesis-run" synthesis-run
    "eval-fidelity" eval-fidelity
    "eval-retrieval" eval-retrieval
    "eval-gate"      eval-gate

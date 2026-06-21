@@ -17,9 +17,10 @@
            (p/shell "clojure" "-M:run" "ingest-repo" src "slayer"))}
 
   dev:reingest
-  {:doc "Full always-fresh reingest: ingest:slayer (pull + ingest) -> glossary:build -> index:rebuild. Every run reflects the latest slayer; aborts rather than building on stale data."
+  {:doc "Full always-fresh reingest: ingest:slayer (pull + ingest) -> glossary:build -> synthesis:run -> index:rebuild. Every run reflects the latest slayer; aborts rather than building on stale data."
    :task (do (run 'ingest:slayer)
              (run 'glossary:build)
+             (run 'synthesis:run)
              (run 'index:rebuild))}
 
   index:rebuild
@@ -29,6 +30,10 @@
   glossary:build
   {:doc "Derive glossary concept nodes from kb/"
    :task (p/shell "clojure" "-M:run" "glossary-build")}
+
+  synthesis:run
+  {:doc "Extractive State synthesis over kb/ (ADR-016): fill pending ## State from top observations, verbatim with refs. Idempotent; exits non-zero on any orphan claim."
+   :task (p/shell "clojure" "-M:run" "synthesis-run")}
 
   glossary:define
   {:doc "Optional grounded LLM definitions for concepts lacking one (generate-once; inert without SLAYER_CHAT_URL)"

@@ -7,12 +7,13 @@ Prophet exposes the Slayer knowledge base over MCP — five **read** tools: `sea
 
 Two ways to connect:
 
-- **Local stdio — current demo/preview (ADR-013).** The section below.
-- **Hosted HTTP — parked.** A public `https://<DOMAIN>/mcp` endpoint that returns
-  once Slayer hosts the embedder. The per-client HTTP configs follow it, ready for
-  when it is live.
+- **Hosted HTTP — live, open (ADR-015).** A public `https://prophet.aszc.dev/mcp`
+  endpoint, FTS-only, no token. Jump to [Hosted HTTP](#hosted-http-live-open). This is
+  the zero-setup path.
+- **Local stdio — demo/preview (ADR-013).** The section below; adds the vector lane via
+  a local omlx embedder.
 
-## Local stdio (current)
+## Local stdio (demo/preview)
 
 Prereqs: the JVM/Clojure toolchain and a built corpus (see
 [`docs/quickstart.md`](docs/quickstart.md)), plus a local omlx embedder for hybrid
@@ -39,33 +40,33 @@ Verify: `claude mcp get slayer-kb` → `Status: ✔ Connected`.
 
 ---
 
-# Hosted HTTP (parked — returns with the public deployment)
+# Hosted HTTP (live, open)
 
-> The endpoints below use `https://<DOMAIN>/mcp`. They apply to the **parked** hosted
-> deployment (ADR-013); there is **no public preview** during the local demo phase.
-> Replace `<DOMAIN>` with the deployment host once it exists. If a deployment sets
-> `MCP_AUTH_TOKEN`, add the `Authorization: Bearer <TOKEN>` header as shown.
+> The hosted MVP is live at `https://prophet.aszc.dev/mcp` — public, read-only,
+> **open** (no token, no Origin allowlist; ADR-015). It is **FTS-only** (no embedder):
+> retrieval runs on FTS + exact-alias + graph; the vector lane is Phase 2. The
+> `Authorization: Bearer` lines below are shown only for when a deployment enables
+> `MCP_AUTH_TOKEN` — the hosted MVP needs none.
 
 ## Claude Code (CLI)
 
 ```sh
-claude mcp add --transport http prophet https://<DOMAIN>/mcp
-# with a token:
-claude mcp add --transport http prophet https://<DOMAIN>/mcp --header "Authorization: Bearer <TOKEN>"
+claude mcp add --transport http slayer-kb https://prophet.aszc.dev/mcp
+# if a deployment enables a token:
+claude mcp add --transport http slayer-kb https://prophet.aszc.dev/mcp --header "Authorization: Bearer <TOKEN>"
 ```
 
 Or as project config in `.mcp.json`:
 
 ```json
-{ "mcpServers": { "prophet": { "type": "http", "url": "https://<DOMAIN>/mcp" } } }
+{ "mcpServers": { "slayer-kb": { "type": "http", "url": "https://prophet.aszc.dev/mcp" } } }
 ```
 
 ## Claude Desktop
 
-Settings → Connectors → **Add custom connector** → paste `https://<DOMAIN>/mcp`.
-The connection is opened from Anthropic's cloud, so the endpoint must be public;
-if the deployment sets an Origin allowlist (`MCP_ALLOWED_ORIGINS`), it must admit
-that origin.
+Settings → Connectors → **Add custom connector** → paste `https://prophet.aszc.dev/mcp`.
+The connection is opened from Anthropic's cloud; the hosted MVP is public and sets no
+Origin allowlist, so it connects without extra configuration.
 
 ## Codex
 
@@ -75,36 +76,24 @@ In `~/.codex/config.toml`:
 [features]
 experimental_use_rmcp_client = true
 
-[mcp_servers.prophet]
-url = "https://<DOMAIN>/mcp"
+[mcp_servers.slayer-kb]
+url = "https://prophet.aszc.dev/mcp"
 ```
-
-For an authed server, log in once: `codex mcp login prophet`.
 
 ## Cursor
 
 In `~/.cursor/mcp.json`:
 
 ```json
-{ "mcpServers": { "prophet": { "url": "https://<DOMAIN>/mcp" } } }
-```
-
-With a token, add headers:
-
-```json
-{ "mcpServers": { "prophet": { "url": "https://<DOMAIN>/mcp",
-  "headers": { "Authorization": "Bearer <TOKEN>" } } } }
+{ "mcpServers": { "slayer-kb": { "url": "https://prophet.aszc.dev/mcp" } } }
 ```
 
 ## API connector (programmatic)
 
-In a Messages request, attach the server:
+In a Messages request, attach the server (open — no `authorization_token`):
 
 ```json
 "mcp_servers": [
-  { "type": "url", "url": "https://<DOMAIN>/mcp", "name": "prophet",
-    "authorization_token": "<TOKEN>" }
+  { "type": "url", "url": "https://prophet.aszc.dev/mcp", "name": "slayer-kb" }
 ]
 ```
-
-Omit `authorization_token` when the server is open.

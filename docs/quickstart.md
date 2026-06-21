@@ -89,11 +89,20 @@ bb index:rebuild   # -> {... :embedded <n> :mode :hybrid}
 - **One runtime for both lanes.** Document vectors and query vectors must come
   from the same runtime + model — mixing runtimes silently degrades retrieval
   (cosine can fall below 0.2 for the same text). The dimension is pinned at 1024.
-- **Hosted runtime is parked.** A future public HTTP MCP repins this to a
-  Slayer-hosted embedder (TEI/Gemini, the parked container path); switching is
-  just a re-embed + `bb index:rebuild`, no store change (ADR-013).
+- **Hosted embedder is Phase 2.** The hosted MVP is FTS-only (ADR-015); turning the
+  vector lane on there repins to a Slayer-hosted embedder (TEI or a hosted API);
+  switching is just a re-embed + `bb index:rebuild`, no store change (ADR-013).
 
 ## Use it from Claude (MCP onboarding)
+
+**Skip the setup — use the hosted endpoint.** The public FTS-only MCP is live and open
+(ADR-015); no toolchain, no corpus, no token:
+
+```sh
+claude mcp add --transport http slayer-kb https://prophet.aszc.dev/mcp
+```
+
+The steps below are only for running it **locally over stdio** with the vector lane.
 
 The demo serves the MCP over **stdio**. Register it once with `claude mcp add`
 (user scope = available in every project); pass the omlx env so the vector lane

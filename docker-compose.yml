@@ -1,0 +1,46 @@
+# Hosted MVP (ADR-015): a single FTS-only container.
+#
+# Builds the Dockerfile image, rebuilds the corpus from the public source repo at
+# boot (deploy/entrypoint.sh: clone -> ingest -> glossary -> index -> web), then
+# serves the MCP-HTTP endpoint and the static Hugo site from one JVM process.
+#
+# The vector lane is OFF: with SLAYER_EMBED_URL unset the RRF fusion drops the
+# inert lane and retrieval runs on FTS + exact-alias + graph. The embedder is
+# Phase 2 (a CPU TEI sidecar or a hosted API; ADR-010 governs the runtime).
+#
+# Public and open (ADR-008 read-only over public data): no bearer, no Origin
+# allowlist. Both controls live in the HTTP transport and can be enabled via
+# MCP_AUTH_TOKEN / MCP_ALLOWED_ORIGINS if abuse appears.
+#
+# The service name `prophet` is load-bearing: the host binds the public domain to
+# this service (and its SERVICE_FQDN_* magic var) on container port 8765.
+services:
+  prophet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # The platform injects the public URL; the domain is bound to this service
+      # (the single exposed port, 8765).
+      - SERVICE_FQDN_PROPHET=/
+      # Boot-rebuild source: the public lab repo. CFG selects resources/sources/<CFG>.edn.
+      - PROPHET_SOURCE_REPO=https://github.com/slayerlabs/slayer
+      - PROPHET_SOURCE_CONFIG=slayer
+      # FTS-only: no embedder -> vector lane inert (ADR-015).
+      - SLAYER_EMBED_URL=
+      # Open, read-only: no auth, no Origin allowlist (ADR-008, ADR-015).
+      - MCP_AUTH_TOKEN=
+      - MCP_ALLOWED_ORIGINS=
+      - MCP_HTTP_HOST=0.0.0.0
+      - MCP_HTTP_PORT=8765
+      - PROPHET_WEB_DIR=/app/web/public
+    expose:
+      - "8765"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8765/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # Cold boot clones the source and rebuilds the corpus + index before serving.
+      start_period: 300s

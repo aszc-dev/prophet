@@ -366,3 +366,52 @@ this code repo.
 **3. License — MIT — DECIDED.** `LICENSE` (SPDX `MIT`) at the repo root covers the
 code; it is referenced from the README. `kb/` content licensing is deferred with
 decision 1.
+
+## ADR-015 — Hosted MVP: public, open, FTS-only HTTP MCP on a self-hosted host
+
+**Context.** ADR-013 deferred *hosted inference* and parked the whole container path,
+leaving the demo at macOS + stdio. But the value a consumer wants — a shared, always-on
+HTTP MCP over the live corpus — does not depend on inference. Only the embedder was the
+blocker, and the vector lane is not on the critical path: FTS + exact-alias + graph
+already carry retrieval (gold set r@10 ≈ 0.95), and with no `SLAYER_EMBED_URL` the RRF
+fusion simply drops the inert vector lane (`index/query.clj`). The corpus is rebuilt at
+boot from the **public** `slayerlabs/slayer` (entrypoint clone → ingest → glossary →
+index → web), so *where* it runs is fungible — a small always-on container is enough.
+The maintainer already operates a self-hosted always-on host, and `prophet.aszc.dev`
+already resolves to it over HTTPS.
+
+**Decision.** Ship a **hosted MVP now**, in the FTS-only variant:
+- **Single FTS-only container**, reproducible from the repo via a committed
+  `docker-compose.yml` (one service `prophet`, built from the `Dockerfile`,
+  boot-rebuild from `PROPHET_SOURCE_REPO` = public `slayerlabs/slayer`). No embedder:
+  `SLAYER_EMBED_URL` is unset, so the vector lane is inert by design.
+- **Public and open.** The data is public and the surface is read-only (ADR-008), so the
+  MVP runs with **no bearer** (`MCP_AUTH_TOKEN` unset) and **no Origin allowlist**
+  (`MCP_ALLOWED_ORIGINS` unset) — minimum friction for agent consumers. Both controls
+  remain available in the HTTP transport and can be flipped on if abuse appears.
+- **Endpoint.** `https://prophet.aszc.dev/mcp` (MCP), `/health` (liveness), `/` (the
+  static Hugo site), all from the one JVM process (`bb serve:mcp-http`).
+- **Freshness.** A scheduled redeploy (~15 min) re-runs the boot pipeline against the
+  latest public source, so `whats_new` reflects upstream changes. Push-to-`main`
+  autodeploy (GitHub App source) ships code changes.
+
+**Status of prior decisions.** This **un-parks** the container / MCP-HTTP + static-site
+path from ADR-013, **in the FTS-only variant only**. Hosted *inference* stays deferred
+to Slayer (ADR-013): turning the vector lane on — a CPU TEI sidecar (ADR-010) or a paid
+embeddings API — is **Phase 2**, governed by the single-runtime vector invariant
+(ADR-010) and re-validated against Gate B. The `docker-compose.yml` removed when the
+path was parked is re-added here as the reproducible deploy unit.
+
+**Consequences.**
+- A live, shared HTTP MCP + public web at ~zero new infra, consumable by any MCP client
+  today (`claude mcp add --transport http`).
+- The index is **derived** (invariant #1), so enabling the embedder later is a re-embed
+  + `bb index:rebuild` — no canonical-store migration, no schema change (`FLOAT[1024]`
+  already pinned, ADR-009).
+
+**Risks.**
+- **Open endpoint = unauthenticated compute.** Reads are cheap SQLite/FTS lookups; if
+  load or abuse warrants it, flip on the bearer/allowlist or add edge rate-limiting.
+- **No vector recall** in the MVP — cross-lingual expansion is weaker than the hybrid
+  baseline. Accepted: the gold set passes on FTS + alias + graph.
+- Availability tracks the self-hosted host; not yet a hardened public SLA.

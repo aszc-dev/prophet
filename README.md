@@ -18,9 +18,13 @@ node and claim carries an exact provenance ref.
 - **Shipped:** v0 (Tier-A repo ingest → index → MCP read tools) and v0.5 (glossary
   concept nodes, roamable Hugo web with provenance→GitHub links, backlinks,
   ego-graphs, public/internal split).
+- **Hosted MVP (ADR-015):** a public, open, read-only HTTP MCP is live at
+  **`https://prophet.aszc.dev/mcp`** — FTS-only (no embedder), corpus rebuilt at boot
+  from the public `slayerlabs/slayer`. Connect any MCP client in one line (see
+  [Connect](#connect)); no token. The vector lane (a hosted embedder) is Phase 2.
 - **Demo/preview (ADR-013):** runs on macOS with the local **omlx** embedder and a
   **stdio** MCP — build a corpus, `claude mcp add`, and go (see [Connect](#connect)).
-  Hosted online inference + a public HTTP deployment are deferred to Slayer.
+  Hosted online inference (the embedder) is deferred to Slayer.
 - **Pending:** v1 (Discord / Tier B), v1.5 (synthesis + write tools).
 - **Code-only repo.** The `kb/` corpus (≈157 nodes from `slayerlabs/slayer`) is
   built locally or on the deploy host from its source repo `slayerlabs/slayer` —
@@ -30,12 +34,13 @@ node and claim carries an exact provenance ref.
 
 The live MCP surface is exactly five **read** tools — `search`, `get_node`,
 `traverse`, `neighbors`, `whats_new`. There are no write tools (ADR-008). The
-demo/preview serves these over the **stdio** transport (`bb serve:mcp`; ADR-013).
-The **HTTP** transport — used by the parked hosted deployment — is **stateless
+demo/preview serves these over the **stdio** transport (`bb serve:mcp`; ADR-013); the
+hosted MVP serves them over **HTTP** (ADR-015). The **HTTP** transport is **stateless
 Streamable HTTP**: JSON-RPC over `POST /mcp`, `GET /mcp` → 405 (no server-initiated
 stream), `GET /health` for liveness; it negotiates the client's
 `MCP-Protocol-Version` and supports optional `Origin` allowlisting
-(`MCP_ALLOWED_ORIGINS`) and static Bearer auth (`MCP_AUTH_TOKEN`).
+(`MCP_ALLOWED_ORIGINS`) and static Bearer auth (`MCP_AUTH_TOKEN`) — both left **off**
+on the hosted MVP, which is open over public data.
 
 ## Architecture at a glance
 
@@ -65,8 +70,18 @@ bb search "DemoEval"                     # ranked nodes, each with a provenance 
 
 ## Connect
 
-**Current (demo/preview): local stdio.** Build a corpus (Quickstart above), start
-the local omlx embedder, then register the stdio server with Claude in one line
+**Hosted (open, no setup): one line, no token.** The public FTS-only endpoint is live
+(ADR-015):
+
+```sh
+claude mcp add --transport http slayer-kb https://prophet.aszc.dev/mcp
+```
+
+Any MCP client works the same way — per-client configs in [`CONNECT.md`](CONNECT.md).
+Reads only, provenance-pinned, cross-lingual; no auth.
+
+**Local (demo/preview): stdio + hybrid.** For the vector lane, build a corpus
+(Quickstart above), start the local omlx embedder, then register the stdio server
 (replace `/path/to/prophet` and the omlx key):
 
 ```sh
@@ -77,23 +92,21 @@ claude mcp add slayer-kb -s user \
   -- /bin/sh -c 'cd /path/to/prophet && exec "$(command -v clojure)" -M:run serve-mcp'
 ```
 
-Per-client copy-paste configs (stdio now; HTTP for the parked hosted deployment) are
-in [`CONNECT.md`](CONNECT.md). Reads only, provenance-pinned, cross-lingual.
-
-**Parked:** a public HTTP endpoint (`https://<DOMAIN>/mcp`) returns once Slayer hosts
-the embedder (ADR-013).
-
 ## Self-host
 
-**Demo/preview — macOS + omlx (current, ADR-013).** No containers: install the
-JVM/Clojure toolchain, run the local omlx embedder, then ingest → index → serve over
-stdio. Full steps in [`docs/quickstart.md`](docs/quickstart.md).
+**Hosted MVP — single FTS-only container (current, ADR-015).** `docker-compose.yml`
+builds the `Dockerfile` image, rebuilds the corpus at boot from the public
+`slayerlabs/slayer`, and serves MCP-HTTP + the static web on one port. No embedder
+(vector lane inert), public and open. This is what runs at `prophet.aszc.dev`.
 
-**Parked — container + hosted embedder (future).** The containerized stack
-(prophet + a hosted embedder, MCP-HTTP + static web in one image, built from the
-`Dockerfile`) is kept for when Slayer provides online inference. omlx is Apple-Silicon-only, so it
-cannot run in the Linux container — the container path is inherently the
-hosted-inference path, and it returns with the public deployment (ADR-013).
+**Demo/preview — macOS + omlx (ADR-013).** No containers: install the JVM/Clojure
+toolchain, run the local omlx embedder, then ingest → index → serve over stdio for the
+**hybrid** (vector-enabled) experience. Full steps in
+[`docs/quickstart.md`](docs/quickstart.md).
+
+**Phase 2 — hosted embedder.** Turning the vector lane on (a CPU TEI sidecar or a hosted
+API) is deferred to Slayer; omlx is Apple-Silicon-only and cannot run in the Linux
+container (ADR-010, ADR-013).
 
 ## Repo map
 

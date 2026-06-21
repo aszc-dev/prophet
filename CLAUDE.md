@@ -97,16 +97,19 @@ The endpoint must expose OpenAI-compatible `/v1/embeddings` (omlx does; plain
 at native width. `embed/*disabled*` binds inert for hermetic tests. The model +
 runtime are the contract — vectors are not interchangeable across runtimes.
 
-The demo/preview serves **MCP over stdio** on macOS (`bb serve:mcp`, register with
-`claude mcp add`). The containerized path (Docker + TEI/Gemini) is parked
-for the future hosted phase (ADR-013).
+Two MCP surfaces run: (1) the local **stdio** demo/preview on macOS (`bb serve:mcp`,
+`claude mcp add`) with the omlx **hybrid** index; (2) a **hosted FTS-only HTTP MVP** at
+`https://prophet.aszc.dev/mcp` — public, open, no embedder — built from
+`docker-compose.yml` (single container, boot-rebuild from public `slayerlabs/slayer`)
+on the self-hosted Coolify host (ADR-015). The hosted embedder (vector lane) is Phase 2.
 
 **Shipped:** v0 (Tier-A repo ingest → index → MCP) and v0.5 (glossary concept
 nodes via `bb glossary:build`, roamable Hugo web via `bb web:build`). Demo/preview
 runs on macOS with the local omlx embedder and stdio MCP (ADR-013); the index is
-`:hybrid` against the omlx 1024-d baseline. **Parked:** hosted/online inference and
-the containerized deployment (Docker + TEI/Gemini) — deferred to Slayer
-(ADR-013). **Not yet done:** Discord/Tier B (v1); synthesis + write tools (v1.5).
+`:hybrid` against the omlx 1024-d baseline. The hosted MVP (ADR-015) un-parks the
+container/MCP-HTTP path in an **FTS-only** variant (vector lane off). **Parked:** hosted
+*inference* — a Slayer-hosted embedder turns the hosted vector lane on (Phase 2,
+ADR-010/013). **Not yet done:** Discord/Tier B (v1); synthesis + write tools (v1.5).
 
 ## Repo layout
 
@@ -133,7 +136,8 @@ prophet/                    # repo (project: Prophet)
   eval/                     # retrieval gold set (retrieval-gold.edn)
   web/                      # Hugo config/layouts; content/ + public/ are generated
   examples/sample-source/   # tracked tiny source for the quickstart / CI fixture
-  Dockerfile                # build + serve image (parked hosted path)
+  Dockerfile                # build + serve image (hosted MVP, ADR-015)
+  docker-compose.yml        # hosted FTS-only MVP: single container on Coolify (ADR-015)
   deploy/entrypoint.sh      # pipeline (ingest -> ... -> serve)
   bb.edn / deps.edn         # tasks + JVM deps
   kb/                       # the note store (md+YAML) — source of truth; gitignored (code-only)

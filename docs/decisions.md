@@ -573,3 +573,82 @@ the gate enforces provenance presence. Re-ingest stays a byte-identical no-op.
   title-subject definers.
 - The mapping grammar grows with new source shapes; it stays data (EDN), reviewed
   per source, not engine code.
+
+## ADR-018 — Engine/source boundary: a new KB is config, not a fork
+
+**Context.** The seam already exists: `SourceAdapter` (discover/fetch/changed) with
+`RawItem` as the only boundary that crosses into `extract → resolve → store →
+index → synth → mcp`, and source-specific knowledge already lives as **data** in
+`resources/sources/<name>.edn` (`:github`, `:shortname`, `:kind-rules`,
+`:json-specs`). What was missing is (a) an ADR naming this as the governing
+invariant, and (b) closing the one remaining leak of source-specifics back into the
+engine:
+- `ingest/load-config` defaulted the config `name` to the clone-dir **basename** and
+  silently fell back to Hugo defaults when no config matched, so a missing/wrong
+  name ingested ~0 nodes (root cause of P0-2; encoded in `ingest_config_test.clj`).
+
+Two earlier leaks are **already closed** and are pinned here as fitness functions,
+not reopened: `web/build.clj` resolves provenance URLs only through
+`provenance/ref->url` (no hardcoded org/repo map), and `test/sources/parityrepo.edn`
+already asserts web + provenance resolve org/repo from config, not code.
+
+**Decision.** The engine (`src/prophet/**`) is **source-agnostic**; everything
+source-specific is **data** under `resources/sources/<name>.edn`. A new KB is:
+1. one `<name>.edn` (`:github`, `:shortname`, `:kind-rules`, `:json-specs`),
+2. optionally generic-`:json` specs for its structured files,
+3. its own `eval/<name>-gold.edn`,
+4. **nothing in `src/`** — unless a source has a genuinely new *shape* that no
+   `:json-spec` can express, in which case a new extractor is the **exception**.
+
+Sub-rules that keep the line from eroding:
+- **Single extractor registry.** `extract-for` is a `defmulti` dispatched on
+  `RawItem` `:kind`; every kind is a `defmethod` in `ingest.clj` and nothing
+  dispatches elsewhere. The current set: `:log :page :card :config :doc :json
+  :leaderboard` (plus a `:default` → nil for kinds with no extractor, e.g. `:code`
+  `:data`). Prefer the generic `:json` extractor (driven by `:json-specs`) over a
+  bespoke one; a bespoke extractor is allowed only when the shape is not expressible
+  as a json-spec (graph-heavy or freeform sources), is registered at this single
+  dispatch, and carries a one-line justification here. No extractor outside the
+  dispatch; no source string baked into one.
+- **Config name is explicit, never derived.** `load-config` with an unknown name
+  **throws**; the silent basename fallback is removed and `ingest-repo!` requires an
+  explicit `config-name`. A degraded ingest errors, it does not return a near-empty
+  corpus that passes smoke. The tracked quickstart fixture gets its own
+  `resources/sources/sample-source.edn` rather than relying on a derived default.
+- **One source of truth for provenance URLs.** Org/repo→blob-URL is `:github` in the
+  source config, resolved only via `provenance/ref->url`; web resolves through the
+  same fn (already true — pinned by `parityrepo.edn`).
+
+**Boundary (explicit).**
+- *Engine (source-agnostic, in `src/`):* `SourceAdapter` protocol + `RawItem`
+  contract; the `extract-for` dispatch and the extractor set; `resolve`/alias table;
+  `store` (append-only + supersede, ADR-002); `index` (FTS5 + sqlite-vec + graph +
+  RRF, ADR-004/006); the synthesis strategy seam (ADR-016); MCP transport; the
+  `eval` runner; the telemetry chokepoint (ADR-011).
+- *Config (per KB):* `resources/sources/<name>.edn` (`:github`, `:shortname`,
+  `:kind-rules`, `:json-specs`); `eval/<name>-gold.edn`; embedder model + dims (the
+  ADR-009 1024 pin is a default, not a per-source lock); visibility/consent defaults
+  (Tier A/B, ADR-008/010).
+
+**Fitness functions (CI-enforced).**
+- `bb fitness:sources` — no source literal (`slayerlabs`, `"slayer"`, any org/repo,
+  `slayer.fabryka`) appears in `src/**`; the only home for those is
+  `resources/sources/*.edn`.
+- `parityrepo.edn` test: web + provenance (+ any new consumer) resolve org/repo only
+  from source config.
+- `load-config` unit test: an unknown name throws; it does not return defaults.
+
+**Consequences.** Generalization cost drops to ~0 incremental: a new corpus is
+drop-in per source config, and Slayer itself gets cleaner — the basename leak
+closes. The moat is untouched: it lives in curation + provenance discipline +
+workflow embeddedness, never in the engine.
+
+**Risks.** Premature generalization beyond config-hardening: this ADR is justified
+by **Slayer hygiene alone**; a *second* KB stays gated on a real second corpus with
+a real owner (N=1 today). Bespoke extractors are an escape hatch that, unchecked,
+re-forks the engine — the single-dispatch registry + per-extractor justification is
+the guard. The generic `:json` spec will not cover graph-heavy or narrative
+sources; those legitimately need extractors, named here rather than smuggled in.
+
+**Non-goals.** A standalone KB-framework product/repo; multi-tenancy; runtime config
+hot-swap. None are warranted at current scale.

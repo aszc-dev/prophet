@@ -25,12 +25,10 @@
     (println "index smoke OK:" (pr-str r))))
 
 (defn- ingest-repo [[dir config-name]]
-  (when-not dir
-    (binding [*out* *err*] (println "usage: ingest-repo <repo-path> [config-name]"))
+  (when-not (and dir config-name)
+    (binding [*out* *err*] (println "usage: ingest-repo <repo-path> <config-name>"))
     (System/exit 2))
-  (println "ingest:" (pr-str (if config-name
-                               (ingest/ingest-repo! dir config-name)
-                               (ingest/ingest-repo! dir)))))
+  (println "ingest:" (pr-str (ingest/ingest-repo! dir config-name))))
 
 (defn- glossary-build [_]
   (println "glossary:" (pr-str (glossary/build!))))

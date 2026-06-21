@@ -17,26 +17,35 @@
             [prophet.store.node :as store]))
 
 (defn load-config
-  "Per-repo config from resources/sources/<name>.edn, or a Hugo-ish default when
-   absent. `name` defaults to the repo directory's basename."
+  "Per-source ingest config from resources/sources/<name>.edn. The name is
+   explicit, never derived from a clone path: an unknown name throws rather than
+   silently falling back to defaults and ingesting a near-empty corpus (ADR-018)."
   [name]
   (if-let [res (io/resource (str "sources/" name ".edn"))]
     (edn/read-string (slurp res))
-    {:kind-rules repo/default-kind-rules}))
+    (throw (ex-info (str "Unknown source config " (pr-str name)
+                         " — expected resources/sources/" name ".edn")
+                    {:config name}))))
 
-(defn- extract-for
-  "Dispatch a RawItem to its extractor. Returns a seq of node maps and/or attach
-   bundles (maps carrying :attach-to). :json needs the matching spec from config."
-  [{:keys [kind meta] :as item} cfg]
-  (case kind
-    :log         (log/extract item)
-    :page        (page/extract item)
-    :card        (card/extract item)
-    :config      (config/extract item)
-    :doc         (doc/extract item)
-    :json        (ejson/extract item (get-in cfg [:json-specs (:path meta)]))
-    :leaderboard (leaderboard/extract item)
-    nil))
+(defmulti extract-for
+  "Dispatch a RawItem to its extractor by :kind. The single extractor registry
+   (ADR-018): every source kind is a defmethod here, nothing dispatches elsewhere,
+   and no source string is baked into one. A new kind is a new defmethod; a
+   genuinely new shape that no :json-spec can express is the only reason to add
+   one. Returns a seq of node maps and/or attach bundles (maps carrying
+   :attach-to)."
+  (fn [item _cfg] (:kind item)))
+
+(defmethod extract-for :log [item _] (log/extract item))
+(defmethod extract-for :page [item _] (page/extract item))
+(defmethod extract-for :card [item _] (card/extract item))
+(defmethod extract-for :config [item _] (config/extract item))
+(defmethod extract-for :doc [item _] (doc/extract item))
+;; :json needs the matching spec from config, keyed by the item's repo path.
+(defmethod extract-for :json [item cfg]
+  (ejson/extract item (get-in cfg [:json-specs (get-in item [:meta :path])])))
+(defmethod extract-for :leaderboard [item _] (leaderboard/extract item))
+(defmethod extract-for :default [_ _] nil)
 
 (defn- norm [s] (some-> s str str/lower-case str/trim))
 
@@ -60,25 +69,26 @@
     {:status :orphan :match (:match bundle)}))
 
 (defn ingest-repo!
-  "Cold or incremental ingest of a source repo into the note store."
-  ([dir] (ingest-repo! dir (.getName (io/file dir))))
-  ([dir config-name]
-   (let [cfg       (load-config config-name)
-         shortname (or (:shortname cfg) config-name)
-         a         (repo/adapter dir (or (:kind-rules cfg) repo/default-kind-rules) shortname)
-         refs      (repo/discover a)
-         existing  (mapv :node (store/all-notes))
-         extracted (->> refs (map #(repo/fetch a %)) (mapcat #(extract-for % cfg)) (remove nil?))
-         bundles   (filter :attach-to extracted)
-         raw       (remove :attach-to extracted)
-         prepared  (resolve/prepare raw existing)
-         node-res  (mapv store/upsert! prepared)
-         ;; attach pass runs against the now-current store (anchors exist by now)
-         after     (mapv :node (store/all-notes))
-         att-res   (mapv #(attach! after %) bundles)
-         tally     (fn [acc {:keys [status]}] (update acc status (fnil inc 0)))]
-     (-> {:head (repo/head-sha dir) :refs (count refs) :config config-name
-          :nodes (count prepared)}
-         (as-> m (reduce tally m node-res))
-         (assoc :attached (count (remove #(#{:unchanged :orphan} (:status %)) att-res))
-                :orphans  (count (filter #(= :orphan (:status %)) att-res)))))))
+  "Cold or incremental ingest of a source repo into the note store. `config-name`
+   is required and must name a resources/sources/<name>.edn (ADR-018); a missing
+   or unknown config fails the ingest loudly rather than degrading silently."
+  [dir config-name]
+  (let [cfg       (load-config config-name)
+        shortname (or (:shortname cfg) config-name)
+        a         (repo/adapter dir (or (:kind-rules cfg) repo/default-kind-rules) shortname)
+        refs      (repo/discover a)
+        existing  (mapv :node (store/all-notes))
+        extracted (->> refs (map #(repo/fetch a %)) (mapcat #(extract-for % cfg)) (remove nil?))
+        bundles   (filter :attach-to extracted)
+        raw       (remove :attach-to extracted)
+        prepared  (resolve/prepare raw existing)
+        node-res  (mapv store/upsert! prepared)
+        ;; attach pass runs against the now-current store (anchors exist by now)
+        after     (mapv :node (store/all-notes))
+        att-res   (mapv #(attach! after %) bundles)
+        tally     (fn [acc {:keys [status]}] (update acc status (fnil inc 0)))]
+    (-> {:head (repo/head-sha dir) :refs (count refs) :config config-name
+         :nodes (count prepared)}
+        (as-> m (reduce tally m node-res))
+        (assoc :attached (count (remove #(#{:unchanged :orphan} (:status %)) att-res))
+               :orphans  (count (filter #(= :orphan (:status %)) att-res))))))

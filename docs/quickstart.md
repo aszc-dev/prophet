@@ -51,7 +51,8 @@ content page) so the loop runs on a clean clone:
 pre-commit install
 
 # 1. ingest a source into kb/ (deterministic; re-running is a no-op)
-bb ingest:repo examples/sample-source
+#    the second arg names the source config (resources/sources/<name>.edn)
+bb ingest:repo examples/sample-source sample-source
 
 # 2. derive the index from kb/
 bb index:rebuild
@@ -65,7 +66,8 @@ bb stats
 
 `bb search` returns nodes whose observations carry `git:<repo>@<sha>:<path>`
 provenance refs. No network, no GPU, no model required. Point `bb ingest:repo` at
-a real source repo (e.g. a clone of the lab's content) to build the full corpus;
+a real source repo (e.g. a clone of the lab's content) with its config name to
+build the full corpus;
 `bb eval:retrieval` / `bb eval:gate` then score it against `eval/retrieval-gold.edn`
 (the gold set references real corpus node ids, so it is meaningful only with the
 real corpus present).

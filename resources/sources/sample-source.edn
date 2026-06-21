@@ -1,0 +1,19 @@
+;; Per-source ingest config for examples/sample-source — the tracked quickstart
+;; fixture (a Hugo-style source: content/, cards/, configs/). Explicit config so
+;; the ingest names its source rather than deriving it from the clone path
+;; (ADR-018). No :github — provenance refs render raw, which is fine for a
+;; throwaway fixture. The :shortname keeps source_keys stable across clone dirs.
+{:shortname "sample-source"
+
+ :kind-rules
+ [["content/**/*.md"        :page]
+  ["cards/**/*.md"          :card]
+  ["cards/**/*.yaml"        :card]
+  ["**/eksperymenty*.jsonl" :log]
+  ["**/*.jsonl"             :log]
+  ["configs/**/*.yaml"      :config]
+  ["configs/**/*.toml"      :config]
+  ["src/**/*"               :code]
+  ["**/*.safetensors"       :data]
+  ["**/*.gguf"              :data]
+  ["**/*.bin"               :data]]}

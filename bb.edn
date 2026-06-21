@@ -2,7 +2,22 @@
 ;; under Babashka — see decisions.md ADR-006), so index-touching tasks shell out
 ;; to `clojure -M:run`. Pure transforms and adapters can run under either runtime.
 {:tasks
- {:requires ([babashka.process :as p])
+ {:requires ([babashka.process :as p]
+             [clojure.string :as str])
+
+  fitness:sources
+  {:doc "Boundary gate (ADR-018): no source literal may appear in src/** — every source specific lives only in resources/sources/*.edn. Fails if a source string leaks back into the engine."
+   :task (let [hits (-> (p/shell {:out :string :continue true}
+                                 "grep" "-rniE"
+                                 "slayerlabs|\"slayer\"|aszc-dev/prophet|slayer\\.fabryka"
+                                 "src")
+                        :out)]
+           (if (str/blank? hits)
+             (println "fitness:sources OK — no source literal in src/")
+             (do (binding [*out* *err*]
+                   (println "source literal leaked into src/ (move it to resources/sources/*.edn):")
+                   (print hits))
+                 (System/exit 1))))}
 
   ingest:repo
   {:doc "Incremental ingest of a source repo into kb/ — clojure -M:run ingest-repo <repo-path>"

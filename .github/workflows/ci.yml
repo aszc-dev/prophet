@@ -47,6 +47,8 @@ jobs:
         run: bb fmt:check
       - name: Lint
         run: bb lint
+      - name: Engine/source boundary (ADR-018)
+        run: bb fitness:sources
       - name: Test
         run: bb test
 
@@ -57,7 +59,7 @@ jobs:
 
       # end-to-end pipeline smoke on the bundled fixture (no embedder, no real corpus)
       - name: Ingest fixture
-        run: bb ingest:repo examples/sample-source
+        run: bb ingest:repo examples/sample-source sample-source
       - name: Build index
         run: bb index:rebuild
       - name: Search returns the fixture node with provenance

@@ -195,6 +195,24 @@
         (is (= #{"license: MIT" "Q9: 58.2"} (set (map :text (:observations n))))
             "card observation preserved, leaderboard observation appended")))))
 
+(deftest reingest-dedupes-observations-across-shas
+  ;; re-ingest at a moved HEAD must NOT accumulate the same fact pinned twice; the
+  ;; freshest commit pin wins while genuinely new observations still append.
+  (with-temp-kb
+    (fn []
+      (let [base {:type :benchmark :title "B" :status :current :source_key "r:b#x"
+                  :provenance [{:source :git :ref "git:r@s:b#x"}]}
+            _ (store/upsert! (assoc base :observations
+                                    [{:date "" :ref "git:r@sha1:card#x" :text "rozmiar: 18821"}]))
+            r (store/upsert! (assoc base :observations
+                                    [{:date "" :ref "git:r@sha2:card#x" :text "rozmiar: 18821"}
+                                     {:date "" :ref "git:r@sha2:card#x" :text "licencja: publiczny"}]))
+            n (store/md->node (slurp (:file r)))]
+        (is (= 2 (count (:observations n))) "same fact across SHAs collapses to one")
+        (is (= #{"rozmiar: 18821" "licencja: publiczny"} (set (map :text (:observations n)))))
+        (is (every? #(re-find #"@sha2:" (:ref %)) (:observations n))
+            "the freshest commit pin is kept")))))
+
 (deftest flatten-body-captures-blocks
   (testing "table -> cells, no leading pipe (was :stub-table)"
     (let [t (common/flatten-body "| pole | znaczenie |\n|---|---|\n| id | klucz |")]

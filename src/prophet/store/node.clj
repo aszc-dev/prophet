@@ -118,14 +118,37 @@
        :else n))
    x))
 
+(defn- ref-identity
+  "SHA-independent identity of a provenance ref: `git:<repo>@<sha>:<rest>` collapses
+   to `git:<repo>:<rest>`, so the same file location pinned at a different commit
+   maps to one identity. Non-git refs are returned unchanged."
+  [ref]
+  (str/replace (str ref) #"^(git:[^@]+)@[^:]+:" "$1:"))
+
+(defn- obs-identity
+  "Identity of an observation for dedup: SHA-independent ref + date + text. The
+   commit sha is provenance metadata, not part of what the observation says, so the
+   same fact re-ingested at a newer HEAD is the same observation."
+  [{:keys [ref date text]}]
+  [(ref-identity ref) (str date) text])
+
 (defn merge-observations
-  "Append-only union of observation lists, deduped by [ref text], existing first.
-   Observations are never replaced (invariant #3): a re-extract of one source must
-   not drop observations another source appended to the same node."
+  "Append-only union of observation lists, deduped by SHA-independent identity
+   (ref-without-sha + date + text). The same fact re-pinned at a newer commit
+   collapses to one — keeping the freshest pin — so re-ingest at a moved HEAD does
+   not accumulate duplicate observations. Genuinely new observations (different
+   text/location) are still preserved and appended (invariant #3); existing order
+   is kept."
   [existing-obs new-obs]
-  (let [seen (set (map (juxt :ref :text) existing-obs))]
-    (into (vec existing-obs)
-          (remove #(seen [(:ref %) (:text %)]) new-obs))))
+  (let [fresh    (into {} (map (juxt obs-identity identity)) new-obs)
+        ;; re-pin existing observations to the latest ref when re-seen this pass
+        repinned (map (fn [o] (get fresh (obs-identity o) o)) existing-obs)]
+    (->> (concat repinned new-obs)
+         (reduce (fn [[seen acc] o]
+                   (let [k (obs-identity o)]
+                     (if (seen k) [seen acc] [(conj seen k) (conj acc o)])))
+                 [#{} []])
+         second)))
 
 (defn upsert!
   "Materialize a node to disk. Observations merge append-only with any already on

@@ -64,16 +64,22 @@
 
 (defn report
   "Score the gold set. Pure given a search-fn + gold, so it is unit-testable with a
-   stub; the CLI passes the live index."
+   stub; the CLI passes the live index. Entries tagged `:expect-fail true` (known
+   failures — e.g. a query the FTS-only lane cannot rank, or a corpus coverage gap)
+   are scored and surfaced separately under :known-failing; they do NOT feed the
+   aggregates or the gate, so a recorded miss never masks a real regression."
   ([] (report query/search (load-gold *gold-path*)))
   ([search-fn gold]
-   (let [rows (mapv #(score-query search-fn %) gold)]
+   (let [{kf true normal false} (group-by #(boolean (:expect-fail %)) gold)
+         rows  (mapv #(score-query search-fn %) normal)
+         krows (mapv #(score-query search-fn %) kf)]
      {:mode    (if (embed/config) :hybrid :fts)
       :overall (agg rows)
       :by-lang (into (sorted-map)
                      (map (fn [[l rs]] [l (agg rs)]) (group-by :lang rows)))
       :misses  (->> rows (filter #(nil? (:rank %)))
                     (mapv #(select-keys % [:q :lang :top])))
+      :known-failing (mapv #(select-keys % [:q :lang :rank :note]) krows)
       :rows    rows})))
 
 (defn- pct [x] (format "%.1f%%" (* 100.0 (double x))))
@@ -104,10 +110,25 @@
         (println (format "      [%s] %s" type title)))))
   (println))
 
+(defn print-known-failing!
+  "Surface the :expect-fail entries (excluded from the gate). A nil rank is the
+   expected outcome; a non-nil rank is an unexpected PASS worth promoting."
+  [{:keys [known-failing]}]
+  (when (seq known-failing)
+    (println "known-failing (recorded, excluded from gate):")
+    (doseq [{:keys [q lang rank note]} known-failing]
+      (println (format "  %-5s %-5s %s%s"
+                       (if rank (str "#" rank " !") "·")
+                       (name lang) q (if note (str "  — " note) ""))))
+    (println)))
+
 (defn scan!
   "Entry point: compute + print, return the data map."
   []
-  (doto (report) print-report!))
+  (let [rep (report)]
+    (print-report! rep)
+    (print-known-failing! rep)
+    rep))
 
 ;; --- CI gate ---------------------------------------------------------------
 ;;
@@ -141,6 +162,7 @@
   ([] (gate! (report)))
   ([rep]
    (print-report! rep)
+   (print-known-failing! rep)
    (let [checks (gate-checks rep)
          pass   (every? :ok checks)]
      (println (format "=== CI gate (%s floors) ===" (name (:mode rep))))

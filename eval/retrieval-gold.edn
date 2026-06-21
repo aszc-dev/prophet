@@ -12,6 +12,21 @@
 ;;
 ;; :lang marks the query language; EN entries over PL-titled nodes are the
 ;; cross-lingual stress test for the vector lane.
+;;
+;; FEEDBACK CHANNELS. This set now also receives:
+;;   1. External-agent feedback — queries a real agent ran against the live MCP,
+;;      tagged `:note "Xavier ..."`. Confirmed hits become positives; confirmed
+;;      misses become `:expect-fail` records (below).
+;;   2. Distilled telemetry gaps — `bb telemetry:gaps` mines the MCP tool-call log
+;;      (ADR-011) for zero-result / low-score / no-followup queries. PROMOTE a gap
+;;      to a gold entry only after human review: the `:no-followup` heuristic cannot
+;;      tell "agent read the top hit and was satisfied" from "agent dismissed every
+;;      hit", so a gap is a CANDIDATE, not a confirmed miss.
+;;
+;; `:expect-fail true` marks a known failure (FTS-only ranking limit or a corpus
+;; coverage gap). Such entries are scored and surfaced under "known-failing" but
+;; EXCLUDED from the aggregates and the CI gate — a recorded miss never masks a
+;; real regression, and a future fix (vector lane, new node) shows as a PASS.
 
 [{:q "Polish private held-out exam sheets to prevent benchmark contamination"
   :lang :en :expect #{"slayer:public/data/datasety.json#prywatny_held_out" "slayer:bench/HELDOUT.md"}
@@ -62,4 +77,26 @@
  {:q "macierz bazowa SOTA 2026 oś ewaluacji"
   :lang :pl :expect #{"slayer:public/data/chomsky-sota2026/docs/sota_2026_matrix.md"}}
  {:q "zadania KLEJ Open-PL"
-  :lang :pl :expect #{"slayer:public/results/matrix.json#klej-open-pl-klasyfikacja" "slayer:public/results/experiments.json#v2"}}]
+  :lang :pl :expect #{"slayer:public/results/matrix.json#klej-open-pl-klasyfikacja" "slayer:public/results/experiments.json#v2"}}
+
+ ;; --- external-agent feedback (Xavier, 2026-06-21): confirmed hits ----------
+ {:q "LLMzSzŁ"
+  :lang :pl :expect #{"slayer:public/data/benchmarks.json#llmzszl" "slayer:public/data/datasety.json#llmzszl"}
+  :note "Xavier — confirmed hit; the agent's verbatim query"}
+ {:q "dekontaminacja"
+  :lang :pl :expect #{"slayer:V3_DATA_AUDIT.md" "slayer:DATA_LINEAGE.md" "slayer:BIELIK_RECIPE_NOTES.md"}
+  :note "Xavier — confirmed hit; decontamination protocol / audit / lineage"}
+ {:q "Bielik vs Qwen"
+  :lang :pl :expect #{"slayer:BIELIK_RECIPE_NOTES.md" "slayer:DATA_LINEAGE.md"}
+  :note "Xavier — confirmed hit; recon + lineage"}
+
+ ;; --- external-agent feedback (Xavier): gold-negative, known-failing --------
+ ;; The agent searched for composition of small models and got the harness-bug
+ ;; experiment (#harness-binary-artifact) instead — FTS keyword overlap on
+ ;; "modeli". There is no dedicated composition-of-small-models node yet (a corpus
+ ;; coverage gap); V3_DISTILL_SCENARIO is the nearest adjacent research node.
+ ;; Gated to the vector lane / a future node — do NOT re-rank FTS to chase this.
+ {:q "kompozycja małych modeli"
+  :lang :pl :expect #{"slayer:V3_DISTILL_SCENARIO.md"}
+  :expect-fail true
+  :note "Xavier miss: returns #harness-binary-artifact; coverage gap + FTS overlap"}]

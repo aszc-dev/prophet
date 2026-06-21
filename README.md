@@ -89,9 +89,9 @@ the embedder (ADR-013).
 JVM/Clojure toolchain, run the local omlx embedder, then ingest → index → serve over
 stdio. Full steps in [`docs/quickstart.md`](docs/quickstart.md).
 
-**Parked — Docker Compose + hosted embedder (future).** The containerized stack
-(prophet + a hosted embedder, MCP-HTTP + static web in one image, `docker-compose.yml`)
-is kept for when Slayer provides online inference. omlx is Apple-Silicon-only, so it
+**Parked — container + hosted embedder (future).** The containerized stack
+(prophet + a hosted embedder, MCP-HTTP + static web in one image, built from the
+`Dockerfile`) is kept for when Slayer provides online inference. omlx is Apple-Silicon-only, so it
 cannot run in the Linux container — the container path is inherently the
 hosted-inference path, and it returns with the public deployment (ADR-013).
 

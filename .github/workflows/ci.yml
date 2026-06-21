@@ -14,7 +14,7 @@ on:
 # index -> search). The hybrid gate (omlx, ADR-013) runs on the host.
 #
 # The containerized path (Docker + TEI/Gemini) is parked for the future
-# hosted phase (ADR-013); its compose-smoke + deploy jobs were removed from this
+# hosted phase (ADR-013); its container-smoke + deploy jobs were removed from this
 # workflow and live in git history.
 jobs:
   ci:

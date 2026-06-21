@@ -133,8 +133,7 @@ prophet/                    # repo (project: Prophet)
   eval/                     # retrieval gold set (retrieval-gold.edn)
   web/                      # Hugo config/layouts; content/ + public/ are generated
   examples/sample-source/   # tracked tiny source for the quickstart / CI fixture
-  Dockerfile                # build + serve image
-  docker-compose.yml        # prophet + tei (hybrid) for local = host pipeline
+  Dockerfile                # build + serve image (parked hosted path)
   deploy/entrypoint.sh      # pipeline (ingest -> ... -> serve)
   bb.edn / deps.edn         # tasks + JVM deps
   kb/                       # the note store (md+YAML) — source of truth; gitignored (code-only)

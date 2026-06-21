@@ -90,7 +90,7 @@ bb index:rebuild   # -> {... :embedded <n> :mode :hybrid}
   from the same runtime + model — mixing runtimes silently degrades retrieval
   (cosine can fall below 0.2 for the same text). The dimension is pinned at 1024.
 - **Hosted runtime is parked.** A future public HTTP MCP repins this to a
-  Slayer-hosted embedder (TEI/Gemini, the `docker-compose.yml` path); switching is
+  Slayer-hosted embedder (TEI/Gemini, the parked container path); switching is
   just a re-embed + `bb index:rebuild`, no store change (ADR-013).
 
 ## Use it from Claude (MCP onboarding)

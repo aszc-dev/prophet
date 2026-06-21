@@ -245,7 +245,7 @@ vectors that enter `kb.db` must come from the pinned TEI.
 - TEI L2-normalizes server-side; `vec_nodes` uses sqlite-vec's default L2 metric,
   so L2-rank == cosine-rank on unit vectors. No client-side normalization.
 - The `127.0.0.1`-not-`localhost` IPv6 gotcha (ADR-009) applies to host-local
-  endpoints; across the compose network the service name resolves to IPv4.
+  endpoints; across the container network the service name resolves to IPv4.
 - This model has no ONNX export, so TEI uses its Candle CPU backend. cpu-1.7's
   Candle backend aborts at warmup on some CPUs ("Intel MKL ERROR: Parameter N …
   GEMM"); cpu-1.8 fixes it. Pass `--auto-truncate` (required when

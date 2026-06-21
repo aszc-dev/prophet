@@ -1,0 +1,36 @@
+{
+  "experiments": [
+    {
+      "id": "demo-trained",
+      "date": "2026-06-13",
+      "name": "demo — trening + pierwszy wynik DemoBench",
+      "base": "Qwen-Demo-7B",
+      "method": "SFT bf16 DoRA r16",
+      "n_examples": 1200,
+      "status": "clean",
+      "data": {"destylacja": 800, "EN retencja": 300, "styl": 100},
+      "train_cfg": {"LR": "5e-5 cosine", "epoki": 2, "early-stop": "patience 2"},
+      "eval": {
+        "harness": "bench_demo.py (n=400, seed 42)",
+        "tasks": {
+          "demo — DemoBench acc": "66.8",
+          "baza Qwen-Demo-7B": "63.5",
+          "demo v1": "65.0"
+        }
+      },
+      "note": "Pierwszy czysty wynik: +3.3 nad baza (CI sie naklada, odporne). CPT odlozone — SFT-first wystarcza.",
+      "log_note": "eval-loss spadal monotonicznie do 0.441; ~36 s/krok na H100, 2h23m",
+      "curves": {"eval": [[210, 0.4416], [240, 0.4412], [246, 0.4413]]},
+      "plot": "/results/plots/demo.png"
+    },
+    {
+      "id": "demo-planned",
+      "date": "2026-06-10",
+      "name": "demo — plan (brak wyniku)",
+      "method": "CPT EntiGraph",
+      "status": "do budowy",
+      "base": "—",
+      "eval": {"harness": "bench_demo.py (n=400, seed 42)"}
+    }
+  ]
+}

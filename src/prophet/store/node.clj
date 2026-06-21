@@ -34,8 +34,10 @@
        (or state "_pending synthesis_") "\n\n"
        "## Observations (append-only; every line carries a ref)\n\n"
        (str/join "\n"
-                 (for [{:keys [date ref text]} observations]
-                   (str "- " (when (seq (str date)) (str date " ")) "[" ref "] " text)))
+                 (for [{:keys [date ref text kind]} observations]
+                   (str "- " (when (seq (str date)) (str date " ")) "[" ref "] "
+                        (when (and kind (seq (str (name kind)))) (str "{" (name kind) "} "))
+                        text)))
        "\n"))
 
 (defn node->md
@@ -46,16 +48,26 @@
        "---\n"
        (render-body node)))
 
-(def ^:private obs-re #"^- (?:(\S+) )?\[([^\]]+)\] (.*)$")
+;; An observation line is `- <date>? [<ref>] {<kind>}? <text>`. Date and kind are
+;; both optional: prose extractors emit kind-less observations, JSON-derived ones
+;; carry a closed :kind (ADR-017). Parsing kind only when present keeps the round
+;; trip byte-identical for kind-less observations (no spurious :kind key).
+(def ^:private obs-re #"^- (?:(\S+) )?\[([^\]]+)\] (?:\{([a-z]+)\} )?(.*)$")
 
 (defn md->node
-  "Parse an on-disk note back into a node map (frontmatter + observations)."
+  "Parse an on-disk note back into a node map (frontmatter + observations).
+   Observations are read only from the `## Observations` section: synthesized State
+   lines share the `- [ref] text` shape, so scanning the whole body would re-ingest
+   them as phantom observations (and churn the store on the next pass)."
   [^String content]
   (let [[_ fm body] (re-matches #"(?s)---\n(.*?)\n---\n(.*)" content)
-        front (yaml/parse-string fm :keywords true)
-        obs   (->> (str/split-lines (or body ""))
-                   (keep #(when-let [[_ date ref text] (re-matches obs-re %)]
-                            {:date date :ref ref :text text})))]
+        front    (yaml/parse-string fm :keywords true)
+        obs-body (or (second (re-find #"(?s)\n## Observations[^\n]*\n(.*)$" (or body "")))
+                     "")
+        obs      (->> (str/split-lines obs-body)
+                      (keep #(when-let [[_ date ref kind text] (re-matches obs-re %)]
+                               (cond-> {:date date :ref ref :text text}
+                                 kind (assoc :kind (keyword kind))))))]
     (assoc front :observations (vec obs) :body (or body ""))))
 
 ;; --- paths -----------------------------------------------------------------

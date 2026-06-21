@@ -1,0 +1,16 @@
+{
+  "updated": "2026-06-13",
+  "comment": "demo matrix",
+  "sections": [
+    {
+      "title": "DemoBench — likelihood (protokół paperowy)",
+      "official_for": "porownania-likelihood-demo",
+      "protocol": "answer log-likelihood, n=400, seed 42",
+      "cols": ["Qwen-Demo-7B (baza)", "demo v1", "demo v3"],
+      "rows": [
+        {"name": "DemoBench (egzaminy)", "vals": [58.5, 65.0, null]}
+      ],
+      "note": "demo v1 = baza + adapter stylu. v3: trening nie wystartowal."
+    }
+  ]
+}

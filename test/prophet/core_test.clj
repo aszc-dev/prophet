@@ -85,9 +85,11 @@
 
 (deftest json-spec-extract-maps-foreign-fields
   ;; mirrors slayer's datasety.json: a list of records with Polish field names
-  (let [spec {:node-type :dataset :iter :list :id :id :title :nazwa :state :opis
+  (let [spec {:node-type :dataset :iter :list :id :id :title :nazwa
               :tags :tagi :moc ["dane"] :aliases [:id :nazwa]
-              :observations [:rozmiar :licencja]}
+              :observations [{:kind :definition :field :opis}
+                             {:kind :meta :field :rozmiar :tmpl "rozmiar: %s"}
+                             {:kind :meta :field :licencja :tmpl "licencja: %s"}]}
         item {:kind :json :ref "git:slayer@s:public/data/datasety.json"
               :meta {:repo "slayer" :path "public/data/datasety.json"}
               :body (str "[{\"id\":\"llmzszl\",\"nazwa\":\"LLMzSzŁ\",\"opis\":\"egzaminy CKE\","
@@ -95,11 +97,14 @@
         [n] (ejson/extract item spec)]
     (is (= :dataset (:type n)))
     (is (= "LLMzSzŁ" (:title n)) "title mapped from :nazwa")
-    (is (= "egzaminy CKE" (:state n)) "state mapped from :opis")
+    (is (nil? (:state n)) "no field reaches State from the extractor (ADR-017)")
+    (is (some #(and (= :definition (:kind %)) (= "egzaminy CKE" (:text %)))
+              (:observations n))
+        "opis becomes a :definition observation")
     (is (= #{"llmzszl" "LLMzSzŁ"} (set (:aliases n))) "aliases seed canonical names")
     (is (= "slayer:public/data/datasety.json#llmzszl" (:source_key n)) "sha-free, id-anchored key")
     (is (every? #(re-find #"#llmzszl$" (:ref %)) (:observations n)) "per-record provenance anchor")
-    (is (some #(= "rozmiar: 18 821" (:text %)) (:observations n)))
+    (is (some #(and (= :meta (:kind %)) (= "rozmiar: 18 821" (:text %))) (:observations n)))
     (is (= ["eval" "pl"] (:tags n))))
   (is (empty? (ejson/extract {:kind :json :meta {:path "x.json"} :body "[]"} nil))
       "no spec -> skipped"))

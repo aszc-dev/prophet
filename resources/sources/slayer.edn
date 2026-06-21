@@ -23,27 +23,54 @@
   ["public/data/**/*.md"             :doc]]
 
  ;; path -> spec. Maps each source's own field names to the canonical node shape.
+ ;; `:observations` is a data-driven mapping (ADR-017): each entry carries a closed
+ ;; `:kind` (:result :decision :method :config :meta :link :definition) plus an
+ ;; extraction mode interpreted by extract/json. State is never set here — every
+ ;; fact becomes an observation; synthesis selects State by kind salience.
+ ;;   modes: {:field K [:tmpl S]}            single scalar (verbatim without :tmpl)
+ ;;          {:fields [K..] :tmpl S}         several fields into one line
+ ;;          {:path [K..] [:tmpl S]}         nested scalar
+ ;;          {:path [K..] :each :kv [:tmpl]} map fan-out, one obs per key (src order)
+ ;;          {:field K :roll :kv ...}        roll a map into one obs (sorted)
+ ;;          {:path [K..] :pick :last-y}     last y of a [x y] series
+ ;;          {:path [:rows] :each :row :cols-field :cols}   matrix rows
  :json-specs
  {"public/data/datasety.json"
   {:node-type :dataset
    :iter :list
    :id :id
    :title :nazwa
-   :state :opis
    :tags :tagi
    :moc ["dane"]
    :aliases [:id :nazwa]
-   :observations [:rozmiar :licencja :status :kategoria :link]}
+   :observations
+   [{:kind :definition :field :opis}
+    {:kind :meta :field :licencja  :tmpl "licencja: %s"}
+    {:kind :meta :field :rozmiar   :tmpl "rozmiar: %s"}
+    {:kind :meta :field :status    :tmpl "status: %s"}
+    {:kind :meta :field :kategoria :tmpl "kategoria: %s"}
+    {:kind :link :field :link :tmpl "źródło: %s"}]}
 
   "public/data/benchmarks.json"
   {:node-type :benchmark
    :iter :list
    :id :id
    :title :nazwa
-   :state :opis
+   :tags :tagi
    :moc ["ewaluacja"]
    :aliases [:id :nazwa]
-   :observations [:metryka :metryka_klucz :rozmiar :licencja :rola :kategoria :link]}
+   :observations
+   [{:kind :definition :field :opis}
+    {:kind :meta :fields [:metryka :metryka_klucz] :tmpl "metryka: %s (%s)"}
+    {:kind :meta :field :rola         :tmpl "rola: %s"}
+    {:kind :meta :field :typ_zadania  :tmpl "typ zadania: %s"}
+    {:kind :meta :field :licencja     :tmpl "licencja: %s"}
+    {:kind :meta :field :rozmiar      :tmpl "rozmiar: %s"}
+    {:kind :meta :field :kategoria    :tmpl "kategoria: %s"}
+    {:kind :meta :field :data_dodania :tmpl "dodano: %s"}
+    {:kind :meta :field :dodal        :tmpl "dodał: %s"}
+    {:kind :meta :field :status       :tmpl "status: %s"}
+    {:kind :link :field :link :tmpl "źródło: %s"}]}
 
   "public/results/experiments.json"
   {:node-type :experiment
@@ -51,10 +78,28 @@
    :under "experiments"
    :id :id
    :title :name
-   :state :method
    :moc ["eksperymenty"]
    :aliases [:id]
-   :observations [:base :method :status :date]}
+   :observations
+   [{:kind :meta :field :date   :tmpl "data: %s"}
+    {:kind :meta :field :status :tmpl "status: %s"}
+    {:kind :meta :field :base   :tmpl "baza: %s"}
+    {:kind :method :field :method :tmpl "metoda: %s"}
+    {:kind :meta   :path [:eval :harness] :tmpl "harness: %s"}
+    {:kind :result :path [:eval :tasks] :each :kv :tmpl "%s: %s"}
+    {:kind :result :path [:eval :macro] :tmpl "macro: %s"}
+    {:kind :result :path [:eval :base_macro] :tmpl "base_macro: %s"}
+    {:kind :decision :path [:eval :note]}
+    {:kind :decision :field :note}
+    {:kind :meta   :field :log_note}
+    {:kind :config :field :n_examples :tmpl "n_examples: %s"}
+    {:kind :config :field :data :roll :kv :prefix "miks: " :item "%s %s" :sort :val-desc}
+    {:kind :config :field :train_cfg :roll :kv :prefix "train_cfg: " :item "%s %s" :sort :key-asc}
+    {:kind :config :field :early_stop :tmpl "early-stop: %s"}
+    {:kind :result :path [:curves :eval] :pick :last-y :tmpl "eval-loss końcowy: %s"}
+    {:kind :link :field :hf      :tmpl "HF: %s"}
+    {:kind :link :field :data_hf :tmpl "HF: %s"}
+    {:kind :meta :field :dataset_desc :tmpl "dataset: %s"}]}
 
   "public/results/matrix.json"
   {:node-type :axis
@@ -62,7 +107,9 @@
    :under "sections"
    :id :official_for
    :title :title
-   :state :protocol
    :moc ["ewaluacja"]
    :aliases [:official_for]
-   :observations [:protocol :official_for :note]}}}
+   :observations
+   [{:kind :meta :field :protocol :tmpl "protokół: %s"}
+    {:kind :result :path [:rows] :each :row :cols-field :cols}
+    {:kind :decision :field :note}]}}}

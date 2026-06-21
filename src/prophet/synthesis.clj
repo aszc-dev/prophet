@@ -16,10 +16,28 @@
             [prophet.provenance :as prov]
             [prophet.store.node :as store]))
 
-(def ^:private max-claims
-  "How many observations an extractive State selects (the top-N by the documented
-   tiebreak, which reduces to stable insertion order on the current corpus)."
+(def ^:private state-plan
+  "Per-node-type State selection (ADR-017): ordered [kind take-n] slices.
+   Observations are chosen in this kind priority, then source (insertion) order
+   within a kind. A result-less experiment is legitimate — when a slice has no
+   matching observations it simply contributes nothing. A type not listed falls
+   back to insertion order over all observations (prose sources, whose observations
+   carry no :kind)."
+  {"experiment" [[:result 3] [:decision 1] [:method 1]]
+   "axis"       [[:result 3] [:decision 1] [:method 1]]
+   "dataset"    [[:definition 1] [:meta 2]]
+   "benchmark"  [[:definition 1] [:meta 2]]
+   "concept"    [[:definition 1] [:meta 2]]})
+
+(def ^:private fallback-claims
+  "How many observations an extractive State selects for a kind-less node, by stable
+   insertion order."
   2)
+
+(def ^:private state-line-cap
+  "State display is bounded per claim (decisions/results can be long verbatim
+   prose). The observation stays full on disk; only the State line is capped."
+  200)
 
 (def ^:private state-block-re
   "Captures the prose between the `## State` and `## Observations` headings."
@@ -41,23 +59,38 @@
 
 (defn- resolves? [ref] (some? (prov/ref->url (str ref))))
 
+(defn- cap
+  "Bound a claim for State display (length-only, never sentence-split)."
+  [text]
+  (let [s (str/trim (str text))]
+    (if (> (count s) state-line-cap) (str (subs s 0 state-line-cap) "…") s)))
+
 (defn- render-state
-  "Selected observations -> State prose: each claim verbatim on its own line,
-   carrying its existing ref. Selection only — no paraphrase, no merge, no new
-   sentence."
+  "Selected observations -> State prose: each claim on its own line, carrying its
+   existing ref. Selection only — no paraphrase, no merge, no new sentence; long
+   claims are capped for display (the observation itself stays verbatim)."
   [obs]
   (str/join "\n" (for [{:keys [ref text]} obs]
-                   (str "- [" ref "] " (str/trim (str text))))))
+                   (str "- [" ref "] " (cap text)))))
 
 (defn- selectable
   "Observations eligible to become State claims: non-blank text with a ref, in
-   stable insertion order (the documented tiebreak `ref-count desc -> source
-   priority -> insertion order` reduces to this on a single-source, one-ref-per-
-   observation corpus)."
+   stable insertion order."
   [node]
   (->> (:observations node)
        (filter (fn [{:keys [ref text]}]
                  (and (seq (str/trim (str ref))) (seq (str/trim (str text))))))))
+
+(defn- select-state-obs
+  "Observations selected for State, by the node-type salience plan (ADR-017). Falls
+   back to the top `fallback-claims` in insertion order for kind-less nodes."
+  [node]
+  (let [obs  (selectable node)
+        plan (state-plan (name (:type node)))
+        by-k (fn [k] (filter #(= k (some-> (:kind %) keyword)) obs))]
+    (if-let [picked (and plan (seq (mapcat (fn [[k n]] (take n (by-k k))) plan)))]
+      (vec picked)
+      (vec (take fallback-claims obs)))))
 
 (defn- extractive
   "Extractive State for one node. Returns {:status ... :node node' [:state s]}:
@@ -69,7 +102,7 @@
   (cond
     (current-state node) {:status :skipped :node node}
     :else
-    (let [sel (vec (take max-claims (selectable node)))]
+    (let [sel (select-state-obs node)]
       (cond
         (empty? sel)
         {:status :pending :node node}

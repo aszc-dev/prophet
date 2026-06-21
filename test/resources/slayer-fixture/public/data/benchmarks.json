@@ -1,0 +1,21 @@
+[
+  {
+    "id": "demo-bench",
+    "nazwa": "DemoBench",
+    "opis": "egzaminy demo CKE · 154 domeny",
+    "link": "https://huggingface.co/datasets/demo/demobench",
+    "repo": null,
+    "metryka": "accuracy MCQ",
+    "metryka_klucz": "accuracy",
+    "rozmiar": 18821,
+    "licencja": "publiczny",
+    "kategoria": "pl-core",
+    "rola": "główny agregat",
+    "typ_zadania": "qa-mcq",
+    "tagi": ["pl", "eval", "mcq"],
+    "status": "verified",
+    "dodal": "demo",
+    "data_dodania": "2026-06-11",
+    "uwagi_review": null
+  }
+]

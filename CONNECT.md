@@ -5,6 +5,12 @@ Prophet exposes the Slayer knowledge base over MCP — five **read** tools: `sea
 `traverse`, `neighbors`, `whats_new`. Every result is provenance-pinned (a
 `source_url` to a commit-pinned GitHub blob). Read-only — no write tools (ADR-008).
 
+Each `search` hit also carries a `snippet` (additive, non-breaking field): on a
+lexical (FTS) match it is the matched span with the term delimited by `[ … ]`; on
+a hit surfaced only by the alias or vector lane (no lexical span) it falls back to
+the head of the node's indexed text, undelimited. Treat it as a preview that tells
+you *why/where* a node matched before you `get_node` it.
+
 Two ways to connect:
 
 - **Hosted HTTP — live, open (ADR-015).** A public `https://prophet.aszc.dev/mcp`

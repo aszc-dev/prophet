@@ -88,18 +88,30 @@
                     acc (map-indexed vector ids)))
           {} lanes))
 
+(defn- head-snippet
+  "Undelimited fallback snippet for a hit with no FTS span (alias/vec-only lane):
+   the head of the node's indexed body (state + observations). No match markers —
+   there is no lexical span to highlight, but a snippet is more useful than nil."
+  [body]
+  (some-> body str/trim not-empty (str/replace #"\s+" " ")
+          (as-> s (if (> (count s) 180) (str (subs s 0 180) " …") s))))
+
 (defn- node-meta
   "Metadata {id {:title :type :status :snippet}} for `ids`. Reuses FTS rows (which
-   carry the snippet); fetches the rest — alias/vec-only ids — from `nodes`."
+   carry the matched, delimited snippet); for the rest — alias/vec-only ids with no
+   FTS span — falls back to the head of the indexed body so every hit has a snippet."
   [conn ids fts-rows]
   (let [from-fts (into {} (map (fn [r] [(:node_id r) (select-keys r [:title :type :status :snippet])]))
                        fts-rows)
         missing  (remove from-fts ids)]
     (cond-> from-fts
       (seq missing)
-      (into (map (fn [r] [(:id r) {:title (:title r) :type (:type r)
-                                   :status (:status r) :snippet nil}]))
-            (apply q conn (str "select id,title,type,status from nodes where id in ("
+      (into (map (fn [r] [(:id r) {:title (:title r) :type (:type r) :status (:status r)
+                                   :snippet (head-snippet (:body r))}]))
+            (apply q conn (str "select n.id as id, n.title as title, n.type as type,
+                                       n.status as status, f.body as body
+                                from nodes n join nodes_fts f on f.node_id = n.id
+                                where n.id in ("
                                (str/join "," (repeat (count missing) "?")) ")")
                    missing)))))
 

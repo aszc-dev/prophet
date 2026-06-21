@@ -52,6 +52,36 @@
           (is (= (:nodes r1) (:nodes (schema/rebuild! db)))))
         (finally (rm-rf dir) (.delete (io/file db)))))))
 
+(deftest every-hit-carries-a-snippet
+  ;; FTS hits carry a delimited matched span; alias/vec-only hits (no FTS row)
+  ;; must still get a non-nil fallback snippet from the head of the indexed body.
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/kb-snip-" (System/nanoTime))
+        db  (str dir ".db")]
+    (binding [store/*kb-root* dir
+              query/*db-path* db
+              embed/*disabled* true]
+      (try
+        ;; the alias `phantom-xyz` appears in NO indexed text, so a query for it
+        ;; hits only the alias lane — there is no FTS row to supply a snippet.
+        (let [n (:node (store/upsert!
+                        {:type :dataset :title "Quiet Node" :status :current
+                         :aliases ["phantom-xyz"] :source_key "r:cards/n.md"
+                         :provenance [{:source :git :ref "git:r@s:cards/n.md"}]
+                         :observations [{:date "" :ref "git:r@s:cards/n.md"
+                                         :text "a distinctive body line about kontaminacja"}]}))]
+          (schema/rebuild! db)
+          ;; FTS hit: matched term is delimited
+          (let [hit (first (query/search "kontaminacja"))]
+            (is (= (:id n) (:id hit)))
+            (is (re-find #"\[kontaminacja\]" (:snippet hit))
+                "FTS hit carries the matched span, delimited"))
+          ;; alias-only hit: no FTS span, but a fallback snippet is present
+          (let [hit (first (query/search "phantom-xyz"))]
+            (is (= (:id n) (:id hit)) "alias lane surfaces the node")
+            (is (seq (:snippet hit))
+                "alias/vec-only hit gets a fallback snippet, not nil")))
+        (finally (rm-rf dir) (.delete (io/file db)))))))
+
 ;; --- RRF fusion (pure) -----------------------------------------------------
 
 (deftest rrf-fuses-by-rank-not-raw-score

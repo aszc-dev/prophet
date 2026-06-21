@@ -482,3 +482,94 @@ no node-count churn on re-ingest).
   it is correct and cited; richer prose is the v1.5 abstractive job.
 - A node with zero observations stays `pending` — legitimate, surfaced in the
   count, not an error.
+
+## ADR-017 — Observation-completeness contract: kinded observations, salience, presence gate
+
+**Context.** ADR-016 made State a selection over observations, but the layer that
+feeds it was thin. Measured live on `prophet.aszc.dev/mcp` (commit `2760f7e`):
+
+- **E1 — the extractor dropped the scientific payload.** `experiments.json#v3-trained`
+  materialized 4 observations (`base/method/status/date`); the result (`66.8`), the
+  decision (`note`), the config (`train_cfg`/`data`) and the cost (`log_note`) were
+  all lost. The extractor read top-level scalars only, ignoring nested objects
+  (`eval`, `train_cfg`, `curves`) and long-text fields.
+- **E2 — concept nodes were empty shells.** `held-out` and others had
+  `observations: []` and `_pending` State despite carrying `defined-by` links; the
+  glossary answered nothing for "what is X".
+- **E3 — State could be ungrounded.** A dataset's `opis`/summary leaked straight
+  into `## State` with no inline ref, and the gate checked ref *resolvability*, not
+  *presence*, so ref-less prose State passed.
+
+**Decision.** A node's observations are the contract; State and the glossary are
+projections of them. Four parts:
+
+**1. Closed `:kind` on every observation.** Each observation carries exactly one of
+`:result :decision :method :config :meta :link :definition`. Without a salience
+signal an extractive State over 7–15 heterogeneous observations re-picks an
+arbitrary line (this is why `v3-trained` State showed `method`, not the result).
+`:kind` is stored on the observation line as `{kind}` after the ref
+(`- <date>? [<ref>] {kind}? <text>`); it is optional, so kind-less prose
+observations round-trip byte-identically. `:kind` is part of `:observations`, which
+the content-hash covers, so its introduction is a one-time full corpus rewrite
+(done by a cold rebuild — `kb/` is derived and regenerates stable ULIDs from
+`source_key`); determinism holds afterward.
+
+**2. Field → observation mapping is DATA.** The mapping lives in
+`resources/sources/<src>.edn` under each JSON spec's `:observations`, mirroring the
+path→kind table — the lab tunes which field becomes which kind/template without
+touching the engine. `extract/json` interprets a small grammar: single/multi field,
+nested path, map fan-out (`:each :kv`, source-order-preserving via clj-yaml),
+rolled map (`:roll`, sorted `:val-desc`/`:key-asc`), derived last-point
+(`:pick :last-y`), and matrix rows (`:each :row`, pairing `vals` with `cols`).
+Long-text fields (`note`, `log_note`) are stored **verbatim, never sentence-split**.
+Null / empty / `—` placeholders emit nothing. State is **never** set by an
+extractor (this kills E3 at the root).
+
+**3. State salience (extractive selection).** Synthesis orders a node's
+observations by a per-node-type plan, then source order within a kind:
+`experiment`/`axis` → `:result` (≤3) → `:decision` (1) → `:method` (1);
+`dataset`/`benchmark`/`concept` → `:definition` (1) → `:meta` (≤2). A result-less
+experiment is legitimate — an empty slice contributes nothing. Kind-less nodes
+(prose sources) fall back to the top-2 in insertion order. Each State line is
+capped for display (~200 chars); the observation stays full on disk.
+
+**4. Presence gate.** The synthesis runner (`bb synthesis:run`, the CI gate) now
+fails if any non-empty State line lacks a ref — presence, not only resolvability.
+Ref-less prose that leaked into State is caught, not ignored.
+
+**Glossary grounding.** A concept copies the `:definition` observations of its
+`defined-by` nodes (their `opis`/lead), keeping each ref — deterministic, no LLM
+(that stays the optional `define!` gap-fill). Prose `source` nodes emit their lead
+paragraph as a `:definition` observation (carrying the node ref), which both
+synthesizes their State and grounds concepts they define. A concept whose definers
+carry no definition stays pending and is counted (`bb stats :concept-pending`).
+
+**Typed links from content.** Experiment/dataset/axis nodes resolve in-content
+entity mentions to typed links through the alias table (whole-token, diacritic-
+folded): a benchmark/dataset/model named in title+observations →
+`:uses-benchmark`/`:uses-dataset`/`:base-model`. No hand-wiring; `traverse` now
+reaches the named entity.
+
+**Invariant added.** *State originates only from observations.* No extractor field
+may reach `## State` except by first becoming an observation. This is what makes
+the presence gate sufficient: every State line is a selected observation and so
+carries that observation's ref.
+
+**Persistence/determinism notes.**
+- `md->node` parses observations **only from the `## Observations` section**.
+  Synthesized State lines share the `- [ref] text` shape; scanning the whole body
+  re-ingested them as phantom observations and churned the store.
+- `glossary/scan-text` excludes State (it is synthesized from the same observations
+  and written *after* glossary in the pipeline; scanning it made concept derivation
+  depend on synthesis order).
+
+**Consequences.** `v3-trained` materializes 14 observations and State surfaces the
+result; the glossary answers "what is held-out"; `traverse` works on experiments;
+the gate enforces provenance presence. Re-ingest stays a byte-identical no-op.
+
+**Risks.**
+- Tagging a prose doc's lead as `:definition` is a heuristic; for non-definitional
+  docs it is still a faithful, ref-bearing summary, and concepts only pull it from
+  title-subject definers.
+- The mapping grammar grows with new source shapes; it stays data (EDN), reviewed
+  per source, not engine code.

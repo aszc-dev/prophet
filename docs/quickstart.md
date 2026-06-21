@@ -12,7 +12,8 @@ hybrid retrieval is one section down.
 | Clojure CLI | 1.12+ | `clojure -M:run …` entrypoint |
 | Babashka (`bb`) | 1.x | task runner (`bb.edn`) |
 | Hugo (extended) | recent | only for `bb web:build` |
-| Docker | any | only to run a TEI embedder for hybrid mode (optional) |
+| omlx | recent | local embedder for hybrid mode on Apple Silicon (ADR-013); optional |
+| Claude Code | recent | only to register the MCP server (`claude mcp add`) |
 | pre-commit | 4.x | optional, for the commit hooks |
 
 **Native-lib note (`vec0`).** The sqlite-vec loadable extension is vendored under
@@ -62,26 +63,53 @@ a real source repo (e.g. a clone of the lab's content) to build the full corpus;
 (the gold set references real corpus node ids, so it is meaningful only with the
 real corpus present).
 
-## Enabling hybrid retrieval (optional)
+## Enabling hybrid retrieval (local omlx, ADR-013)
 
-Point the embed client at any OpenAI-compatible `/v1/embeddings` endpoint, then
-rebuild — `bb index:rebuild` embeds the corpus and search switches to `:hybrid`.
+The demo/preview embedder is the **local omlx** server (MLX on Apple Silicon),
+exposing an OpenAI-compatible `/v1/embeddings`. Start `omlx serve` with the
+embedding model loaded, point the client at it, then rebuild — `bb index:rebuild`
+embeds the corpus and search switches to `:hybrid`.
 
 ```sh
-export SLAYER_EMBED_URL=http://127.0.0.1:8080      # the endpoint
-export SLAYER_EMBED_MODEL=Qwen/Qwen3-Embedding-0.6B # 1024-dim
-export SLAYER_EMBED_API_KEY=...                     # only if the server requires it
-bb index:rebuild
+export SLAYER_EMBED_URL=http://127.0.0.1:10240       # the omlx server
+export SLAYER_EMBED_MODEL=Qwen3-Embedding-0.6B-8bit  # 1024-dim
+export SLAYER_EMBED_API_KEY=<omlx-key>               # omlx requires a bearer token
+bb index:rebuild   # -> {... :embedded <n> :mode :hybrid}
 ```
 
 - **Use `127.0.0.1`, not `localhost`.** The JVM HttpClient resolves `localhost`
-  to IPv6 `::1`; many local model servers bind IPv4 only → `ConnectException`.
-- **TEI is the intended production runtime.** HuggingFace Text Embeddings
-  Inference (`text-embeddings-inference:cpu-*`, `--model-id Qwen/Qwen3-Embedding-0.6B`)
-  produces 1024-dim vectors over `/v1/embeddings`. Document vectors and query
-  vectors must come from the same runtime + model revision — mixing runtimes
-  silently degrades retrieval. The MLX→TEI migration is tracked in the
-  going-public plan (§4.2); a dev endpoint (e.g. omlx) works in the meantime.
+  to IPv6 `::1`; omlx binds IPv4 only → `ConnectException`.
+- **One runtime for both lanes.** Document vectors and query vectors must come
+  from the same runtime + model — mixing runtimes silently degrades retrieval
+  (cosine can fall below 0.2 for the same text). The dimension is pinned at 1024.
+- **Hosted runtime is parked.** A future public HTTP MCP repins this to a
+  Slayer-hosted embedder (TEI/Gemini, the `docker-compose.yml` path); switching is
+  just a re-embed + `bb index:rebuild`, no store change (ADR-013).
+
+## Use it from Claude (MCP onboarding)
+
+The demo serves the MCP over **stdio**. Register it once with `claude mcp add`
+(user scope = available in every project); pass the omlx env so the vector lane
+works at query time. Replace `/path/to/prophet` and the omlx key:
+
+```sh
+claude mcp add slayer-kb -s user \
+  --env SLAYER_EMBED_URL=http://127.0.0.1:10240 \
+  --env SLAYER_EMBED_API_KEY=<omlx-key> \
+  --env SLAYER_EMBED_MODEL=Qwen3-Embedding-0.6B-8bit \
+  -- /bin/sh -c 'cd /path/to/prophet && exec "$(command -v clojure)" -M:run serve-mcp'
+```
+
+The `cd` is required: the server resolves `deps.edn` and `kb.db` from the project
+dir, and a user-scope server may launch from any cwd. Verify:
+
+```sh
+claude mcp get slayer-kb     # Status: ✔ Connected
+```
+
+Five read tools are exposed (`search`, `get_node`, `traverse`, `neighbors`,
+`whats_new`); reads are open, there are no write tools (ADR-008). This build reads
+MCP config via `claude mcp …`, not `claude_desktop_config.json`.
 
 ## Tooling
 

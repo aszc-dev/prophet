@@ -96,12 +96,27 @@
   (some-> body str/trim not-empty (str/replace #"\s+" " ")
           (as-> s (if (> (count s) 180) (str (subs s 0 180) " …") s))))
 
+(def ^:private ident-char "[\\p{L}\\p{N}._/:-]")
+
+(defn- demask-snippet
+  "FTS5 marks matched tokens with [ ]. A highlight that abuts an identifier
+   character (inside a URL or a hyphenated identifier, e.g. `.../[llmzszl]-dataset`)
+   reads as a broken literal. Unwrap any such glued highlight, keeping only
+   whole-token highlights bounded by whitespace/punctuation. Render-only — the
+   stored observations are untouched."
+  [s]
+  (some-> s
+          (str/replace (re-pattern (str "(?<=" ident-char ")\\[([^\\]]*)\\]")) "$1")
+          (str/replace (re-pattern (str "\\[([^\\]]*)\\](?=" ident-char ")")) "$1")))
+
 (defn- node-meta
   "Metadata {id {:title :type :status :snippet}} for `ids`. Reuses FTS rows (which
    carry the matched, delimited snippet); for the rest — alias/vec-only ids with no
    FTS span — falls back to the head of the indexed body so every hit has a snippet."
   [conn ids fts-rows]
-  (let [from-fts (into {} (map (fn [r] [(:node_id r) (select-keys r [:title :type :status :snippet])]))
+  (let [from-fts (into {} (map (fn [r] [(:node_id r)
+                                        (-> (select-keys r [:title :type :status :snippet])
+                                            (update :snippet demask-snippet))]))
                        fts-rows)
         missing  (remove from-fts ids)]
     (cond-> from-fts

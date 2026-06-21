@@ -134,3 +134,16 @@
           ;; exact alias still surfaces and leads
           (is (= (:id a) (:id (first (query/search "zeta-matrix"))))))
         (finally (rm-rf dir) (.delete (io/file db)))))))
+
+(deftest demask-snippet-keeps-whole-token-highlights-only
+  ;; WI-5: FTS5 marks matched tokens with [ ]; a highlight glued inside a URL or
+  ;; hyphenated identifier reads as a broken literal and must be unwrapped, while a
+  ;; whole-word highlight is kept.
+  (let [demask #'query/demask-snippet]
+    (is (= "https://huggingface.co/datasets/amu-cai/llmzszl-dataset"
+           (demask "https://huggingface.co/datasets/amu-cai/[llmzszl]-dataset"))
+        "highlight inside a URL is unwrapped")
+    (is (= "the [benchmaxxing] gate" (demask "the [benchmaxxing] gate"))
+        "a whole-word highlight is preserved")
+    (is (= "foo-bar baz" (demask "foo-[bar] baz")) "hyphenated-identifier highlight unwrapped")
+    (is (nil? (demask nil)) "nil-safe")))

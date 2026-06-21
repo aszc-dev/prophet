@@ -115,9 +115,12 @@
       (System/exit 2))))
 
 (defn- stats [_]
-  (let [nodes (map :node (store/all-notes))]
+  (let [nodes    (map :node (store/all-notes))
+        concepts (filter #(= "concept" (some-> (:type %) name)) nodes)
+        pending  (count (filter #(empty? (:observations %)) concepts))]
     (prn {:nodes (count nodes)
-          :by-type (into (sorted-map) (frequencies (map :type nodes)))})))
+          :by-type (into (sorted-map) (frequencies (map :type nodes)))
+          :concept-pending pending})))
 
 (def ^:private commands
   {"smoke"         smoke

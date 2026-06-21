@@ -181,7 +181,18 @@
   ;; concept, or re-running build! churns as concepts accrete into the vocabulary.
   (let [nodes (remove #(= "concept" (name (:type %))) nodes)
         by-id (into {} (map (juxt :id identity) nodes))
-        voc   (collect-vocabulary nodes)]
+        voc   (collect-vocabulary nodes)
+        ;; A concept is grounded by copying the :definition observations of the nodes
+        ;; that DEFINE it (their `opis`, produced by the JSON extractor), each kept
+        ;; with its own ref. This is deterministic — no LLM (that is the optional
+        ;; `define!` gap-fill). A concept whose definers carry no definition stays
+        ;; observation-less and is counted as pending, never silently empty.
+        def-obs (fn [defined-by]
+                  (->> defined-by
+                       (keep by-id)
+                       (mapcat (fn [n] (filter #(= :definition (some-> (:kind %) keyword))
+                                               (:observations n))))
+                       distinct vec))]
     (for [[fk {:keys [surfaces tag? entity? camel? acronym? hyphen?]}] voc
           :let  [{:keys [defined-by mentions]} (links-for fk entity? nodes)]
           ;; promotion: tags, named entities, and coined jargon (CamelCase / non-stop
@@ -209,7 +220,7 @@
        :links       (cond-> {:mentions mentions}
                       (seq defined-by) (assoc :defined-by defined-by))
        :state       nil
-       :observations []})))
+       :observations (def-obs defined-by)})))
 
 (defn- prune-concepts!
   "Remove derived concept nodes whose `source_key` is no longer a candidate. A

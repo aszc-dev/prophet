@@ -47,6 +47,27 @@
     (is (= #{"01HELD" "01DS"} (set (get-in c [:links :defined-by])))
         "both title-subject nodes define the term")))
 
+(deftest concept-grounds-from-definers-definition-observations
+  ;; WI-2: a concept copies the :definition observations of its defining nodes
+  ;; (carrying their ref), so the glossary answers "what is X" instead of an empty
+  ;; shell. A definer without a :definition observation contributes nothing.
+  (let [doc {:id "01HELD" :type :source :title "Prywatny held-out — świeże arkusze"
+             :provenance [{:source :git :ref "git:r@s:bench/HELDOUT.md"}]
+             :observations [{:ref "git:r@s:bench/HELDOUT.md#x" :text "prose, no kind"}]}
+        ds  {:id "01DS" :type :dataset :title "Prywatny held-out"
+             :aliases ["prywatny_held_out"]
+             :provenance [{:source :git :ref "git:r@s:datasety.json#prywatny_held_out"}]
+             :observations [{:ref "git:r@s:datasety.json#prywatny_held_out"
+                             :kind :definition :text "najnowsze egzaminy CKE/PES"}]}
+        by-t (into {} (map (juxt :title identity)) (glossary/candidates [doc ds]))
+        c    (by-t "held-out")
+        obs  (:observations c)]
+    (is (seq obs) "concept is grounded, not an empty shell")
+    (is (= [{:ref "git:r@s:datasety.json#prywatny_held_out"
+             :kind :definition :text "najnowsze egzaminy CKE/PES"}] obs)
+        "the dataset's definition observation is copied with its ref; the kind-less
+         source observation is not")))
+
 (deftest tag-concept-keeps-key-but-gains-defining-link
   ;; existing tag concepts keep their source_key (no id churn) yet now link to the
   ;; entity whose title carries the tag-term, so they can finally ground.

@@ -4,12 +4,19 @@ Get Prophet running on a clean clone, with no embedder configured (the default �
 search runs on FTS + exact-alias + graph; the vector lane stays inert). Enabling
 hybrid retrieval is one section down.
 
+> **Heads-up: this is a Clojure/JVM project.** The pipeline *and* the MCP server
+> run on the JVM via the Clojure CLI — there is no standalone binary. Even if you
+> only want to use the MCP from Claude, you must install **JDK + Clojure CLI +
+> Babashka** first (the `claude mcp add` command launches `clojure -M:run
+> serve-mcp`). If you don't already run a JVM/Clojure toolchain, set that up before
+> anything below.
+
 ## Prerequisites
 
 | Tool | Version | Why |
 |---|---|---|
 | JDK | 21 (8+ works) | runs the index/MCP layer; Clojure 1.12.0 (`deps.edn`) targets the JVM |
-| Clojure CLI | 1.12+ | `clojure -M:run …` entrypoint |
+| Clojure CLI | 1.12+ | `clojure -M:run …` entrypoint — runs the index layer **and the MCP server** |
 | Babashka (`bb`) | 1.x | task runner (`bb.edn`) |
 | Hugo (extended) | recent | only for `bb web:build` |
 | omlx | recent | local embedder for hybrid mode on Apple Silicon (ADR-013); optional |

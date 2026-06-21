@@ -27,6 +27,9 @@ services:
       # Boot-rebuild source: the public lab repo. CFG selects resources/sources/<CFG>.edn.
       - PROPHET_SOURCE_REPO=https://github.com/slayerlabs/slayer
       - PROPHET_SOURCE_CONFIG=slayer
+      # Freshness: re-pull the source and atomically rebuild the index every 15 min,
+      # live (no redeploy). Unset to disable (e.g. local one-shot runs).
+      - PROPHET_REFRESH_SECONDS=900
       # FTS-only: no embedder -> vector lane inert (ADR-015).
       - SLAYER_EMBED_URL=
       # Open, read-only: no auth, no Origin allowlist (ADR-008, ADR-015).

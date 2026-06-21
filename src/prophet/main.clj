@@ -17,7 +17,7 @@
             [prophet.store.node :as store]
             [prophet.ingest :as ingest]))
 
-(def ^:private db-path "kb.db")
+(def ^:private db-path (or (System/getenv "PROPHET_DB_PATH") "kb.db"))
 
 (defn- smoke [_]
   (let [r (db/smoke ":memory:")]

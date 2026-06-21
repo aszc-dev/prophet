@@ -8,6 +8,20 @@
   {:doc "Incremental ingest of a source repo into kb/ — clojure -M:run ingest-repo <repo-path>"
    :task (apply p/shell "clojure" "-M:run" "ingest-repo" *command-line-args*)}
 
+  ingest:slayer
+  {:doc "Freshness-guaranteed ingest: fast-forward SLAYER_SRC to origin/main, then ingest into kb/. Fails loudly (no stale ingest) if the source can't fast-forward (dirty, diverged, or offline)."
+   :task (let [src (or (System/getenv "SLAYER_SRC")
+                       (throw (ex-info "SLAYER_SRC is not set — point it at your local slayer clone (e.g. in .env)" {})))]
+           (p/shell "git" "-C" src "fetch" "--quiet" "origin")
+           (p/shell "git" "-C" src "merge" "--ff-only" "origin/main")
+           (p/shell "clojure" "-M:run" "ingest-repo" src "slayer"))}
+
+  dev:reingest
+  {:doc "Full always-fresh reingest: ingest:slayer (pull + ingest) -> glossary:build -> index:rebuild. Every run reflects the latest slayer; aborts rather than building on stale data."
+   :task (do (run 'ingest:slayer)
+             (run 'glossary:build)
+             (run 'index:rebuild))}
+
   index:rebuild
   {:doc "Rebuild the SQLite/vector index from kb/"
    :task (p/shell "clojure" "-M:run" "index-rebuild")}

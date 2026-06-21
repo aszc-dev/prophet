@@ -144,6 +144,10 @@ prophet/                    # repo (project: Prophet)
 Defined in `bb.edn` (run `bb tasks` for the full list). The pipeline-facing ones:
 
 - `bb ingest:repo <repo> [config]` — incremental ingest of a source repo into `kb/`
+- `bb ingest:slayer` — freshness-guaranteed ingest: fast-forward `$SLAYER_SRC` to
+  `origin/main`, then ingest. Aborts (no stale ingest) if it can't fast-forward.
+- `bb dev:reingest` — full always-fresh refresh: `ingest:slayer` → `glossary:build`
+  → `index:rebuild`. Every run reflects the latest `slayer`.
 - `bb glossary:build` — derive glossary concept nodes from `kb/`
 - `bb index:rebuild` — rebuild the SQLite/vector index from `kb/`
 - `bb web:build` — Hugo build (emits public + internal)

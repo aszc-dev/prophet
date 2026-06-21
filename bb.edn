@@ -54,6 +54,10 @@
   {:doc "Distill candidate gold-set queries from the telemetry log (needs PROPHET_TELEMETRY_PATH) -> EDN"
    :task (p/shell "clojure" "-M:run" "telemetry-gaps")}
 
+  telemetry:stats
+  {:doc "Operational peek at the MCP telemetry (needs PROPHET_TELEMETRY_PATH): tool/transport counts, search health, top queries, recent calls"
+   :task (p/shell "clojure" "-M:run" "telemetry-stats")}
+
   serve:mcp
   {:doc "Start the MCP server (stdio)"
    :task (p/shell "clojure" "-M:run" "serve-mcp")}

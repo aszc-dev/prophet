@@ -70,6 +70,38 @@
       (println "telemetry disabled (set PROPHET_TELEMETRY_PATH)")
       (System/exit 2))))
 
+(defn- telemetry-stats [_]
+  (if-let [sink (tel/sink-path)]
+    (let [{:keys [rows]} (tel-store/rebuild! sink)
+          s (tel-store/summary)
+          pair-line (fn [pairs] (str/join "  " (map (fn [[k n]] (str (or k "—") "=" n)) pairs)))]
+      (binding [*out* *err*] (println "telemetry: mirrored" rows "rows from" sink))
+      (println (format "calls: %d   errors: %d" (:total s) (:errors s)))
+      (println "by tool:     " (pair-line (:by_tool s)))
+      (println "by transport:" (pair-line (:by_transport s)))
+      (let [se (:searches s)
+            zr (if (pos? (:total se)) (* 100.0 (/ (:zero_result se) (double (:total se)))) 0.0)]
+        (println (format "searches: %d   zero-result: %d (%.0f%%)" (:total se) (:zero_result se) zr))
+        (doseq [m (:by_mode se)]
+          (println (format "  mode %-6s n=%-4d avg-score %.3f"
+                           (or (:mode m) "—") (:n m) (double (or (:avg_score m) 0.0))))))
+      (println (format "latency ms:   avg %.0f   max %s"
+                       (double (or (:avg (:latency_ms s)) 0.0)) (str (or (:max (:latency_ms s)) "—"))))
+      (when (seq (:top_queries s))
+        (println "\ntop queries:")
+        (doseq [q (:top_queries s)]
+          (println (format "  %4d  %-44s ~%.1f hits" (:count q) (str \" (:query q) \") (:avg_results q)))))
+      (when (seq (:recent s))
+        (println "\nrecent:")
+        (doseq [r (:recent s)]
+          (println (format "  %s  %-9s %s%s"
+                           (:ts r) (:tool r)
+                           (if (:query r) (format "\"%s\" -> %s" (:query r) (:results r)) "")
+                           (if (:error r) "  [ERROR]" ""))))))
+    (binding [*out* *err*]
+      (println "telemetry disabled (set PROPHET_TELEMETRY_PATH)")
+      (System/exit 2))))
+
 (defn- stats [_]
   (let [nodes (map :node (store/all-notes))]
     (prn {:nodes (count nodes)
@@ -88,6 +120,7 @@
    "eval-retrieval" eval-retrieval
    "eval-gate"      eval-gate
    "telemetry-gaps" telemetry-gaps
+   "telemetry-stats" telemetry-stats
    "serve-mcp"     (fn [_] (binding [query/*db-path* db-path] (mcp/serve)))
    "serve-mcp-http" (fn [_] (binding [query/*db-path* db-path] (mcp-http/serve)))})
 

@@ -82,3 +82,43 @@
                           (= reason :low-score)   (assoc :top_score (:top_score s))
                           (= reason :no-followup) (assoc :result_ids ids))))))
             (dedupe-by (juxt :q :reason)))))))
+
+(defn summary
+  "Aggregate stats from telemetry.db for a quick operational peek: totals, per-tool
+   and per-transport counts, errors, search health (zero-result rate, score by mode),
+   latency, the most frequent search queries, and the most recent calls. Returns a
+   map; formatting is the caller's job. Empty mirror -> zeros and empty seqs."
+  ([] (summary {}))
+  ([{:keys [top recent] :or {top 15 recent 15}}]
+   (with-open [conn (db/open *db-path*)]
+     (let [opts {:builder-fn rs/as-unqualified-lower-maps}
+           q    (fn [sql & p] (jdbc/execute! conn (into [sql] p) opts))
+           n1   (fn [sql & p] (:n (first (apply q sql p))))
+           search-rows (q "select args, result_count from tool_call where tool='search'")
+           qfreq (->> search-rows
+                      (map (fn [r] [(arg-key (:args r) :query) (or (:result_count r) 0)]))
+                      (filter (comp some? first))
+                      (group-by first)
+                      (map (fn [[query rs]]
+                             {:query query :count (count rs)
+                              :avg_results (/ (reduce + 0 (map second rs)) (double (count rs)))}))
+                      (sort-by :count >)
+                      (take top)
+                      vec)]
+       {:total        (n1 "select count(*) n from tool_call")
+        :errors       (n1 "select count(*) n from tool_call where is_error=1")
+        :by_tool      (mapv (juxt :tool :n)
+                            (q "select tool, count(*) n from tool_call group by tool order by n desc"))
+        :by_transport (mapv (juxt :transport :n)
+                            (q "select transport, count(*) n from tool_call group by transport order by n desc"))
+        :searches     {:total       (n1 "select count(*) n from tool_call where tool='search'")
+                       :zero_result (n1 "select count(*) n from tool_call where tool='search' and result_count=0")
+                       :by_mode     (mapv (fn [r] {:mode (:mode r) :n (:n r) :avg_score (:avg_score r)})
+                                          (q "select mode, count(*) n, avg(top_score) avg_score from tool_call where tool='search' group by mode"))}
+        :latency_ms   (let [r (first (q "select avg(latency_ms) avg, max(latency_ms) max from tool_call"))]
+                        {:avg (:avg r) :max (:max r)})
+        :top_queries  qfreq
+        :recent       (mapv (fn [r] {:ts (:ts r) :tool (:tool r)
+                                     :query (arg-key (:args r) :query)
+                                     :results (:result_count r) :error (= 1 (:is_error r))})
+                            (q "select ts, tool, args, result_count, is_error from tool_call order by ts desc limit ?" recent))}))))

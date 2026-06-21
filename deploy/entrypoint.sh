@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# PARKED (ADR-013): container entrypoint for the future hosted path. The demo/preview
+# runs on macOS via `bb serve:mcp` (stdio), not this script.
+#
 # Build the corpus then serve it. The same pipeline runs locally (bundled fixture)
 # and on the host (PROPHET_SOURCE_REPO points at the real source).
 set -euo pipefail

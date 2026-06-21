@@ -10,8 +10,12 @@ on:
 #
 # This is a code-only repo (DECISIONS-NEEDED #1): the real kb/ corpus is not
 # shipped, so the retrieval gate (eval:gate, gold set tied to real ULIDs) runs on
-# the deploy host, not here. CI instead drives the full pipeline on the bundled
-# fixture (ingest -> index -> search). The TEI-backed hybrid gate runs on the host.
+# the host, not here. CI drives the full pipeline on the bundled fixture (ingest ->
+# index -> search). The hybrid gate (omlx, ADR-013) runs on the host.
+#
+# The containerized path (Docker + TEI/Gemini + Coolify) is parked for the future
+# hosted phase (ADR-013); its compose-smoke + deploy jobs were removed from this
+# workflow and live in git history.
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -58,64 +62,3 @@ jobs:
         run: bb index:rebuild
       - name: Search returns the fixture node with provenance
         run: bb search DemoEval | grep -q DemoEval
-
-  # Self-host outcome gate: stand up the real image (prophet + TEI) on the bundled
-  # fixture, native amd64 (no QEMU), and prove the container is actually usable end
-  # to end. Asserts the hybrid wiring boots (:mode :hybrid) — NOT recall numbers on
-  # a 3-node fixture (recall is the host's Gate B job).
-  compose-smoke:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build and start the stack
-        run: docker compose up -d --build
-
-      - name: Wait for prophet healthy (TEI model download on first boot)
-        run: |
-          for _ in $(seq 1 120); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8765/health || true)
-            if [ "$code" = "200" ]; then echo "prophet healthy"; exit 0; fi
-            sleep 5
-          done
-          echo "prophet did not become healthy in time"; docker compose logs; exit 1
-
-      - name: GET /health -> 200
-        run: |
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8765/health)" = "200"
-
-      - name: tools/list returns exactly the five read tools
-        run: |
-          names=$(curl -s -X POST http://localhost:8765/mcp \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-            | python3 -c 'import sys,json;print(",".join(sorted(t["name"] for t in json.load(sys.stdin)["result"]["tools"])))')
-          echo "tools: $names"
-          test "$names" = "get_node,neighbors,search,traverse,whats_new"
-
-      - name: tools/call search returns a node with provenance
-        run: |
-          curl -s -X POST http://localhost:8765/mcp \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"DemoEval","limit":1}}}' \
-            | python3 -c 'import sys,json;inner=json.loads(json.load(sys.stdin)["result"]["content"][0]["text"]);r=inner[0] if isinstance(inner,list) else inner;assert r.get("source_url"),"no source_url";print("source_url:",r["source_url"])'
-
-      - name: Rebuild reported :mode :hybrid (TEI wiring booted e2e)
-        run: docker compose logs prophet | grep -q ':mode :hybrid'
-
-      - name: Tear down
-        if: always()
-        run: docker compose down -v
-
-  # Deploy only after CI is green, and only on push to main (not PRs). Triggers a
-  # Coolify rebuild of the app, which reruns the pipeline against the live source.
-  deploy:
-    needs: [ci, compose-smoke]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Coolify deploy
-        run: |
-          curl -fsS -X GET \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
-            "${{ secrets.COOLIFY_BASE_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_APP_UUID }}"

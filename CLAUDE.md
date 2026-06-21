@@ -42,8 +42,9 @@ Source priority: **curated artifacts first** (the lab's Hugo site + the
 - Pipeline & tooling: **Clojure + Babashka**. Pure functions for transforms; IO
   (git, http, sqlite, fs) isolated at the edges.
 - Index: **SQLite** with **FTS5** + **sqlite-vec**.
-- Embeddings: **TEI** (HuggingFace Text Embeddings Inference), the one runtime
-  dev=CI=prod (ADR-010); model `Qwen/Qwen3-Embedding-0.6B`, OpenAI `/v1/embeddings`.
+- Embeddings: **local omlx** server (Apple Silicon GPU), the demo-phase runtime
+  (ADR-013); model `Qwen3-Embedding-0.6B-8bit` (1024 dims), OpenAI `/v1/embeddings`.
+  Hosted/online inference is deferred (ADR-013); the TEI/Gemini container path is parked.
 - Extraction LLM (glossary gap-fill, optional): a small local chat endpoint
   (Qwen3 4–8B class), strict JSON, schema-validated.
 - Web: **Hugo** (reuses the lab's existing toolchain). `visibility` flag → two
@@ -82,27 +83,30 @@ Babashka. So `index/*` + MCP run on the JVM (`clojure -M:run <cmd>`); bb.edn tas
 shell out to it. Adapters and pure transforms (`extract/*`, `resolve/*`) are
 runtime-agnostic.
 
-**Embeddings** (ADR-009 dim pin + ADR-010 runtime): with no endpoint the vector
+**Embeddings** (ADR-009 dim pin + ADR-013 runtime): with no endpoint the vector
 lane is inert (weight 0) — search is FTS + exact-alias + graph. Point the client
-at **TEI** and `bb index:rebuild` to switch to `:hybrid`:
-- `SLAYER_EMBED_URL` — TEI's `/v1/embeddings`. In compose it's `http://tei:80`;
-  for a host-local endpoint use `127.0.0.1`, not `localhost` (the JVM HttpClient
-  resolves `localhost` to IPv6 `::1`; some servers bind IPv4 only → `ConnectException`).
-- `SLAYER_EMBED_MODEL` — default `Qwen/Qwen3-Embedding-0.6B` (1024 dims).
-- `SLAYER_EMBED_API_KEY` — bearer token only if the endpoint requires one.
+at the **local omlx** server and `bb index:rebuild` to switch to `:hybrid`:
+- `SLAYER_EMBED_URL` — `http://127.0.0.1:10240` (the omlx server). Use `127.0.0.1`,
+  not `localhost` (the JVM HttpClient resolves `localhost` to IPv6 `::1`; omlx binds
+  IPv4 only → `ConnectException`). The client appends `/v1/embeddings`.
+- `SLAYER_EMBED_MODEL` — default `Qwen3-Embedding-0.6B-8bit` (1024 dims).
+- `SLAYER_EMBED_API_KEY` — the omlx bearer token (omlx requires one).
 
-The endpoint must expose OpenAI-compatible `/v1/embeddings` (TEI does). Dimension
-pinned at 1024; the client omits `:dimensions` at native width (TEI 400s on it).
-`embed/*disabled*` binds inert for hermetic tests. The pinned TEI image + model
-revision are the dev=CI=prod contract — vectors are not interchangeable across
-runtimes. See `docker-compose.yml` for the TEI service.
+The endpoint must expose OpenAI-compatible `/v1/embeddings` (omlx does; plain
+`mlx_lm.server` does not). Dimension pinned at 1024; the client omits `:dimensions`
+at native width. `embed/*disabled*` binds inert for hermetic tests. The model +
+runtime are the contract — vectors are not interchangeable across runtimes.
+
+The demo/preview serves **MCP over stdio** on macOS (`bb serve:mcp`, register with
+`claude mcp add`). The containerized path (Docker + TEI/Gemini + Coolify) is parked
+for the future hosted phase (ADR-013).
 
 **Shipped:** v0 (Tier-A repo ingest → index → MCP) and v0.5 (glossary concept
-nodes via `bb glossary:build`, roamable Hugo web via `bb web:build`). The MLX→TEI
-embedder migration (ADR-010) and the containerized deployment (Docker + Coolify,
-CI-gated; MCP-HTTP + static site) are in. **Not yet done:** Discord/Tier B (v1);
-synthesis + write tools (v1.5); the host hybrid Gate B (re-embed the real corpus
-via TEI, ratchet `eval:gate` to the TEI scorecard).
+nodes via `bb glossary:build`, roamable Hugo web via `bb web:build`). Demo/preview
+runs on macOS with the local omlx embedder and stdio MCP (ADR-013); the index is
+`:hybrid` against the omlx 1024-d baseline. **Parked:** hosted/online inference and
+the containerized deployment (Docker + TEI/Gemini + Coolify) — deferred to Slayer
+(ADR-013). **Not yet done:** Discord/Tier B (v1); synthesis + write tools (v1.5).
 
 ## Repo layout
 

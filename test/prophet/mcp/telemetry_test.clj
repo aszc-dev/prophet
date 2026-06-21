@@ -1,7 +1,6 @@
 (ns prophet.mcp.telemetry-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]
             [clojure.string :as str]
             [prophet.index.embed :as embed]
             [prophet.mcp.telemetry :as tel]))

@@ -14,9 +14,9 @@
     (with-redefs [embed/dim 512]
       (is (= 512 (:dimensions (embed/request-body "m" ["a"])))))))
 
-(deftest default-model-is-the-tei-model
-  (is (= "Qwen/Qwen3-Embedding-0.6B" embed/default-model)
-      "default embedder must match the TEI deployment model (ADR-010)"))
+(deftest default-model-is-the-omlx-model
+  (is (= "Qwen3-Embedding-0.6B-8bit" embed/default-model)
+      "default embedder must match the local omlx deployment model (ADR-013)"))
 
 (deftest embed-batch-chunks-to-max-batch
   (testing "requests are split into <= *max-batch* inputs, order preserved"

@@ -17,9 +17,9 @@
   1024)
 
 (def default-model
-  "Default embedding model — the TEI deployment's model (ADR-010). Overridable via
-   SLAYER_EMBED_MODEL; document and query vectors must come from the same model."
-  "Qwen/Qwen3-Embedding-0.6B")
+  "Default embedding model — the local omlx deployment's model (ADR-013). Overridable
+   via SLAYER_EMBED_MODEL; document and query vectors must come from the same model."
+  "Qwen3-Embedding-0.6B-8bit")
 
 (def ^:dynamic *disabled*
   "Force inert mode regardless of env (tests bind this true for determinism)."

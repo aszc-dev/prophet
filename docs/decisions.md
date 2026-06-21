@@ -290,3 +290,53 @@ HTTP 200, so the query log alone cannot judge retrieval quality. The implicit
 follow-up `get_node` signal is a weak proxy; an explicit `feedback` tool would be
 stronger but breaks the v0 read-only contract (ADR-008). Revisit with the v1.5
 write/synth tools (which will make real LLM calls and justify a fuller exporter).
+
+## ADR-013 — Demo phase: self-hosted macOS + local omlx embeddings (defer hosted inference)
+
+**Context.** The hosted-embeddings path explored after ADR-010 did not pan out for a
+shippable deployment:
+- **TEI on CPU** (ADR-010) is too slow on the shared deploy VPS — embedding the
+  corpus on first boot blocks startup past any acceptable window, and the Candle CPU
+  backend OOMs under tight memory caps. CPU inference is out.
+- A **serverless Gemini** runtime (drafted as ADR-012, **withdrawn before commit**)
+  was rejected for the demo: it makes a preview depend on a third-party API we do not
+  own, on a free tier whose data-use and rate limits we do not control.
+
+We need a working demo/preview now, on owned hardware. The **local omlx** server
+(MLX on Apple Silicon GPU) was the original dev embedder and **already works**: it
+serves an OpenAI-compatible `/v1/embeddings`, and its `Qwen3-Embedding-0.6B-8bit`
+@ 1024-d vectors are the baseline the gold set was measured against.
+
+**Decision.** For the **demo/preview phase**, the embedding runtime is the **local
+omlx** server:
+- `SLAYER_EMBED_URL=http://127.0.0.1:10240`, `SLAYER_EMBED_MODEL=Qwen3-Embedding-0.6B-8bit`,
+  `SLAYER_EMBED_API_KEY=<omlx bearer>`. Dimension stays **1024** (ADR-009 pin holds);
+  `vec_nodes` is `FLOAT[1024]`. The client omits `:dimensions` at native width.
+- The MCP server is served **over stdio** on macOS (`bb serve:mcp`, registered via
+  `claude mcp add`) — no public transport for the preview.
+- ADR-010's single-runtime invariant still holds: document and query vectors both
+  come from omlx; vectors are not interchangeable across runtimes.
+
+**Status of prior decisions.** ADR-010 (TEI) and the containerized deployment
+(Docker + Coolify, MCP-HTTP + static site) are **parked**, not removed — they are the
+future *hosted* path. omlx is Apple-Silicon-only and cannot run in the Linux
+container, so the container path is inherently the hosted-inference path. ADR-012
+(Gemini) is **withdrawn (not adopted)**.
+
+**Hosted inference is deferred to Slayer.** Stable online inference (a hosted GPU
+embedder, or a paid embeddings API) is a resourced effort the solo maintainer is not
+taking on now; the lab has the resources for it. When that lands, revisit the runtime
+choice and re-run Gate B against it.
+
+**Consequences.**
+- Deployment for the demo is bare macOS + stdio — no Docker, no external API
+  dependency, reproducible on the maintainer's machine.
+- 1024 is the **original measured baseline**, so `eval:gate` keeps its current floor:
+  Gate B is a **re-confirmation** (re-run `eval/retrieval-gold.edn` with omlx on the
+  real corpus and verify the numbers hold), not a re-baseline.
+- The vector index is **derived** (invariant #1), so switching back — or forward to a
+  hosted runtime later — is just a full re-embed + `bb index:rebuild`, no
+  canonical-store migration.
+
+**Risks.** The demo depends on the maintainer's Mac + omlx being up; not suitable for
+always-on public exposure (that waits on the deferred hosted path).

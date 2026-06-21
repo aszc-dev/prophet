@@ -415,3 +415,70 @@ path was parked is re-added here as the reproducible deploy unit.
 - **No vector recall** in the MVP — cross-lingual expansion is weaker than the hybrid
   baseline. Accepted: the gold set passes on FTS + alias + graph.
 - Availability tracks the self-hosted host; not yet a hardened public SLA.
+
+## ADR-016 — State synthesis: decoupled idempotent enrichment behind a strategy seam
+
+**Context.** A node's prose body has two sections: `## Observations` (append-only,
+every line ref-bearing) and `## State` (the synthesized answer). Today State is
+populated only when an extractor carries a source field (`:opis`/`:summary`/
+`:hypothesis`); the rest render `_pending synthesis_`. An external agent
+dogfooding the MCP surface gets observations + provenance but **no answer**, and
+must round-trip to `source_url` to read it. We want State filled without an LLM,
+embedder, or any query-time work.
+
+**Decision.** State synthesis is a **decoupled, idempotent enrichment** over
+already-ingested nodes, behind a single chokepoint
+(`prophet.synthesis/synthesize-node`) that dispatches on `:strategy`.
+
+- **v1.4 = `:extractive`** (shipped): State is a *pure function* of node content —
+  it **selects** the top 1–2 existing observations and writes their text
+  **verbatim**, each line keeping its existing `[ref]`. No new tokens, no
+  paraphrase, no merge. Selection-only, so provenance is inherited unchanged.
+- **v1.5 = `:abstractive`** (declared, not built): a small local LLM, **Tier A
+  only**, model-pinned, with the prompt-hash recorded as State provenance. The
+  seam exists so this slots in without touching the serve path.
+
+**Selection order (auditable tiebreak).**
+`ref-count desc → source priority (resources/sources/*.edn) → stable insertion
+order`. On the current corpus every observation carries exactly one ref and there
+is a single source, so this reduces to **stable insertion order** (the first 1–2
+observations as ingested). The full key is documented here so it stays auditable
+when multi-ref observations and additional sources arrive.
+
+**Serve path stays stateless/deterministic — synthesis never runs at query time.**
+It is a separate pass (`bb synthesis:run`), wired into `dev:reingest` after
+`glossary:build` and before `index:rebuild` so synthesized State lands in the
+derived index/web.
+
+**Persistence (the non-obvious part).** State is a *body section*, not a hashed
+frontmatter field: `store/upsert!`'s content-hash covers `[:type :title :status
+:provenance :links :moc :tags :aliases :definition :observations]` — **not
+`:state`** — and `md->node` parses observations back but not the `## State`
+prose. So synthesis **must not** route through `upsert!` (the hash wouldn't
+change → no write). It owns its own writer: render the node with the new
+`:state` via `store/node->md`, compare to the current `## State` block (read back
+with the same regex `glossary/state-text` uses), and **write only when it
+differs**. Re-running on an unchanged node is a byte-identical no-op (invariant:
+no node-count churn on re-ingest).
+
+**Orphan handling (provenance-or-nothing, invariant #3).**
+- **Runtime degrades gracefully:** if a selected observation's ref does not
+  resolve (`provenance/ref->url` → nil), the node is left `pending`, counted in
+  the report, and logged — synthesis never throws, so ingest never crashes.
+- **CI gate hard-fails:** a separate verification scans every written `## State`
+  for refs and exits non-zero on any unresolvable one. The two together mean an
+  orphan claim can neither be silently written (runtime guard) nor silently
+  shipped (CI gate).
+
+**Consequences.**
+- Agents get an answer in `get_node`/`search` without a round-trip, with the
+  source ref already attached to each State line.
+- State is fully rebuildable from the files (invariant #1): it is selection over
+  observations that are themselves derived from pinned sources.
+- The abstractive upgrade is a strategy addition, not a rewrite.
+
+**Risks.**
+- Extractive State can be terse (it is literally the top observations). Accepted:
+  it is correct and cited; richer prose is the v1.5 abstractive job.
+- A node with zero observations stays `pending` — legitimate, surfaced in the
+  count, not an error.

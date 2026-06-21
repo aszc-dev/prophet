@@ -18,11 +18,17 @@
         secs  (c/sections body*)
         intro (some #(when (nil? (:heading %)) (:text %)) secs)
         fname (str/replace (or (last (str/split (str path) #"/")) "") #"\.md$" "")
-        obs   (->> secs
-                   (filter :heading)
-                   (map (fn [{:keys [heading text]}]
-                          {:date "" :ref (str ref "#" (c/anchor heading))
-                           :text (str heading " — " (c/flatten-body text))})))]
+        ;; The lead paragraph (or front-matter summary) is the doc's definition; it
+        ;; becomes a :definition observation carrying the node's ref, NOT a State
+        ;; field — State originates only from observations (ADR-017). This also lets
+        ;; the glossary ground a concept whose definer is this doc.
+        lead  (or (:summary front) (some-> intro c/flatten-body not-empty))
+        def-obs (when lead [{:date "" :ref ref :kind :definition :text lead}])
+        sec-obs (->> secs
+                     (filter :heading)
+                     (map (fn [{:keys [heading text]}]
+                            {:date "" :ref (str ref "#" (c/anchor heading))
+                             :text (str heading " — " (c/flatten-body text))})))]
     [{:type        :source
       :title       (or (:title front) (h1 body*) fname)
       :status      :current
@@ -32,5 +38,4 @@
       :source_key  (str (:repo meta) ":" path)
       :provenance  [{:source :git :ref ref}]
       :links       {}
-      :state       (or (:summary front) (some-> intro (->> (take 600) (apply str))))
-      :observations (vec obs)}]))
+      :observations (vec (concat def-obs sec-obs))}]))

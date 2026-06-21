@@ -83,3 +83,20 @@
           (is (= 1 (count orph)))
           (is (= "discord:secret#123" (:ref (first orph)))))
         (finally (rm-rf dir))))))
+
+(deftest orphans-flags-refless-state-line
+  ;; WI-3 presence gate: a State line with NO ref (a description/summary field that
+  ;; leaked straight into State) is a breach, not only unresolvable refs.
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/kb-presence-" (System/nanoTime))]
+    (binding [store/*kb-root* dir]
+      (try
+        (store/upsert!
+         {:type :source :title "Leaky" :status :current :source_key "slayer:leak"
+          :provenance [{:source :git :ref "git:slayer@s:leak.md"}]
+          :state "najnowsze egzaminy CKE/PES · wykrywanie benchmaxxingu"
+          :observations [{:date "" :ref "git:slayer@s:leak.md" :text "obs"}]})
+        (let [orph (synthesis/orphans)]
+          (is (= 1 (count orph)))
+          (is (nil? (:ref (first orph)))
+              "a non-empty State line carrying no ref is flagged (presence, not just resolvability)"))
+        (finally (rm-rf dir))))))

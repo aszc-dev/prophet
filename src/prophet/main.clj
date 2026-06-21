@@ -45,11 +45,12 @@
   (let [tally (synthesis/run!)
         orph  (synthesis/orphans)]
     (println "synthesis:" (pr-str tally))
-    (println "orphan-claim States:" (count orph))
-    ;; runner + CI gate in one: the runtime guard never writes an unresolvable ref,
-    ;; so any orphan here is a provenance-invariant breach -> fail (ADR-016).
+    (println "unref'd/orphan State lines:" (count orph))
+    ;; runner + CI gate in one: every State line must carry a resolvable ref
+    ;; (presence, not just resolvability — ADR-017). Any breach -> fail.
     (when (seq orph)
-      (doseq [{:keys [id ref]} orph] (println "  ORPHAN" id ref))
+      (doseq [{:keys [id ref line]} orph]
+        (println "  STATE-PROVENANCE" id (or ref "<no-ref>") "::" line))
       (System/exit 1))))
 
 (defn- eval-fidelity [_]

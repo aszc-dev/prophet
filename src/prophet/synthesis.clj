@@ -144,18 +144,23 @@
     {:total 0 :filled 0 :skipped 0 :pending 0 :orphan 0}
     (store/all-notes))))
 
-(def ^:private state-ref-re #"(?m)^- \[([^\]]+)\]")
+(def ^:private state-line-re #"^- \[([^\]]+)\] ")
 
 (defn orphans
-  "Every synthesized State claim across the store whose ref does not resolve. Empty
-   in a healthy corpus (the runtime guard never writes an unresolvable ref); the CI
-   gate hard-fails when this is non-empty (provenance invariant). Only scans the
-   `## State` block, so ref-less extraction prose contributes nothing."
+  "Every State line across the store that breaks the provenance invariant
+   (ADR-017/WI-3): a claim whose ref does not resolve, OR a non-empty State line
+   that carries no ref at all. This enforces ref PRESENCE, not only resolvability —
+   ref-less extraction prose that leaked into State (a description/summary field) is
+   now caught, not ignored. Empty in a healthy corpus; the CI gate (synthesis:run)
+   hard-fails when non-empty."
   []
   (vec
    (for [{:keys [node]} (store/all-notes)
-         :let [block (state-block node)]
+         :let  [block (state-block node)]
          :when block
-         [_ ref] (re-seq state-ref-re block)
-         :when (not (resolves? ref))]
-     {:id (:id node) :ref ref})))
+         line  (->> (str/split-lines block) (map str/trim)
+                    (remove str/blank?)
+                    (remove #(= "_pending synthesis_" %)))
+         :let  [ref (second (re-find state-line-re line))]
+         :when (or (nil? ref) (not (resolves? ref)))]
+     {:id (:id node) :ref ref :line line})))

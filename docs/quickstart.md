@@ -15,7 +15,7 @@ hybrid retrieval is one section down.
 
 | Tool | Version | Why |
 |---|---|---|
-| JDK | 21 (8+ works) | runs the index/MCP layer; Clojure 1.12.0 (`deps.edn`) targets the JVM |
+| JDK | 21 (11+ required) | runs the index/MCP layer; `java.net.http` (embed/chat clients) needs JDK 11+ |
 | Clojure CLI | 1.12+ | `clojure -M:run …` entrypoint — runs the index layer **and the MCP server** |
 | Babashka (`bb`) | 1.x | task runner (`bb.edn`) |
 | Hugo (extended) | recent | only for `bb web:build` |

@@ -63,12 +63,14 @@
       (some-> (:state node) str/trim not-empty)))
 
 (defn- scan-text
-  "Text scanned for jargon tokens / mentions: title + state + observation texts.
-   Excludes refs so provenance URLs do not seed bogus acronyms."
+  "Text scanned for jargon tokens / mentions: title + observation texts. State is
+   deliberately excluded: it is synthesized FROM these observations and is written
+   after glossary in the pipeline, so scanning it would make concept derivation
+   depend on synthesis order (a determinism hazard). Excludes refs so provenance
+   URLs do not seed bogus acronyms."
   [node]
   (str/join "\n" (remove str/blank?
-                         (concat [(:title node)] [(state-text node)]
-                                 (map :text (:observations node))))))
+                         (cons (:title node) (map :text (:observations node))))))
 
 ;; --- jargon detection ------------------------------------------------------
 

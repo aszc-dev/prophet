@@ -140,6 +140,23 @@
         "unresolved hint kept for visibility, not linked")
     (is (nil? (:link_hints e)) "hints consumed")))
 
+(deftest resolver-links-in-content-entity-mentions
+  ;; WI-4: an experiment that names a benchmark in its observations gets a typed
+  ;; :uses-benchmark link via the alias table (whole-token, diacritic-folded).
+  (let [bench {:id "01BENCH00000000000000000LL" :type :benchmark :title "LLMzSzŁ"
+               :aliases ["llmzszl"] :source_key "slayer:benchmarks.json#llmzszl"
+               :links {}}
+        exp   {:type :experiment :title "v3 trening" :source_key "slayer:exp#v3"
+               :links {} :link_hints {}
+               :observations [{:ref "git:slayer@s:e#v3" :kind :result
+                               :text "v3 — LLMzSzŁ acc: 66.8"}
+                              {:ref "git:slayer@s:e#v3" :kind :meta
+                               :text "harness: bench_llmzszl_likelihood.py"}]}
+        [_ e] (resolve/prepare [bench exp] [])]
+    (is (= ["01BENCH00000000000000000LL"] (get-in e [:links :uses-benchmark]))
+        "the benchmark named in an observation is linked, whole-token")
+    (is (not (contains? (:links e) :uses-dataset)) "no spurious relations")))
+
 (deftest resolver-reuses-existing-id
   (let [existing [{:id "01EXISTING0000000000000000" :source_key "r:log#e1"}]
         [n] (resolve/prepare [{:type :experiment :title "exp"
